@@ -8,6 +8,8 @@ from scipy import interpolate
 from scipy.sparse import csr_matrix
 import argparse
 
+# Authors: Darren Engwirda
+
 
 def map_to_r3(mesh, xlon, ylat, head, tail):
     """
@@ -15,8 +17,7 @@ def map_to_r3(mesh, xlon, ylat, head, tail):
     panel LAT[HEAD:TAIL] to manage memory use.  
 
     """
-    # Authors: Darren Engwirda
-
+    
     sinx = np.sin(xlon * np.pi / 180.)
     cosx = np.cos(xlon * np.pi / 180.)
     siny = np.sin(ylat * np.pi / 180.)
@@ -41,8 +42,7 @@ def tria_area(rs, pa, pb, pc):
     sphere of radius RS.    
 
     """
-    # Authors: Darren Engwirda
-
+    
     lena = circ_dist(1., pa, pb)
     lenb = circ_dist(1., pb, pc)
     lenc = circ_dist(1., pc, pa)
@@ -65,7 +65,6 @@ def circ_dist(rs, pa, pb):
     sphere of radius RS.    
 
     """
-    # Authors: Darren Engwirda    
 
     dlon = .5 * (pa[:, 0] - pb[:, 0])
     dlat = .5 * (pa[:, 1] - pb[:, 1])
@@ -78,21 +77,37 @@ def circ_dist(rs, pa, pb):
     return dist
 
 
-def cell_quad(mesh, ffun):
+def find_vals(xlon, ylat, vals, xpos, ypos):
+
+    cols = xlon.size - 1
+    rows = ylat.size - 1
+
+    dlon = (xlon[-1] - xlon[+0]) / cols
+    dlat = (ylat[-1] - ylat[+0]) / rows
+
+    icol = (xpos - np.min(xlon)) / dlon
+    irow = (ypos - np.min(ylat)) / dlat
+
+    icol = np.asarray(icol, dtype=np.uint32)
+    irow = np.asarray(irow, dtype=np.uint32)
+
+    return vals[irow, icol]
+
+
+def cell_quad(mesh, xlon, ylat, vals):
     """
     Eval. finite-volume integrals for mesh cells - splitting
     each into a series of triangles and employing an order-2
     quadrature rule.
 
     """
-    # Authors: Darren Engwirda
-
+    
     class base: pass
 
     abar = np.zeros(
-        (mesh.dimensions["nCells"].size, 1), dtype=np.float64)
+        (mesh.dimensions["nCells"].size, 1), dtype=np.float32)
     fbar = np.zeros(
-        (mesh.dimensions["nCells"].size, 1), dtype=np.float64)
+        (mesh.dimensions["nCells"].size, 1), dtype=np.float32)
 
     pcel = np.zeros(
         (mesh.dimensions["nCells"].size, 2), dtype=np.float64)
@@ -102,19 +117,20 @@ def cell_quad(mesh, ffun):
     pcel = pcel * 180. / np.pi
     pcel[pcel[:, 0] > 180., 0] -= 360.
 
-    fcel = ffun(pcel[:, 1], pcel[:, 0], grid=False)
+    fcel = find_vals(xlon, ylat, vals, pcel[:, 0], pcel[:, 1])
 
     pcel = pcel * np.pi / 180.
 
     pvrt = np.zeros(
-        (mesh.dimensions["nVertices"].size, 2), dtype=np.float64)
+        (mesh.dimensions["nVertices"].size, 2), 
+        dtype=np.float64)
     pvrt[:, 0] = mesh.variables["lonVertex"][:]
     pvrt[:, 1] = mesh.variables["latVertex"][:]
 
     pvrt = pvrt * 180. / np.pi
     pvrt[pvrt[:, 0] > 180., 0] -= 360.
 
-    fvrt = ffun(pvrt[:, 1], pvrt[:, 0], grid=False)
+    fvrt = find_vals(xlon, ylat, vals, pvrt[:, 0], pvrt[:, 1])
 
     pvrt = pvrt * np.pi / 180.
 
@@ -156,7 +172,7 @@ def cell_quad(mesh, ffun):
     return fbar / abar
 
 
-def rtopo_map(args):
+def remap_dem(args):
     """
     Map elevation and ice+ocn-thickness data from a "zipped" 
     RTopo data-set onto the cells in an MPAS mesh.
@@ -165,11 +181,10 @@ def rtopo_map(args):
     and a local quadrature rule.
 
     """
-    # Authors: Darren Engwirda
-
+    
     print("Loading assests...")
 
-    rtop = nc.Dataset(args.rtop_file, "r")
+    elev = nc.Dataset(args.elev_file, "r")
     mesh = nc.Dataset(args.mpas_file, "r+")
 
 #-- Compute an approximate remapping, associating pixels in
@@ -190,8 +205,8 @@ def rtopo_map(args):
 
     print("Remap elevation...")
 
-    xlon = np.asarray(rtop["lon"][:], dtype=np.float64)
-    ylat = np.asarray(rtop["lat"][:], dtype=np.float64)
+    xlon = np.asarray(elev["lon"][:], dtype=np.float64)
+    ylat = np.asarray(elev["lat"][:], dtype=np.float64)
 
     xmid = .5 * (xlon[:-1:] + xlon[1::])
     ymid = .5 * (ylat[:-1:] + ylat[1::])
@@ -199,7 +214,7 @@ def rtopo_map(args):
     indx = np.asarray(np.round(
         np.linspace(-1, ymid.size, 9)), dtype=np.int32)
 
-    print("* process over 8 tiles.")
+    print("* process tiles:")
 
     nset = []
     for tile in range(indx.size - 1):
@@ -228,25 +243,26 @@ def rtopo_map(args):
 
     smat = csr_matrix((vals, (near, cols)))
     
-    nmap = np.sum(smat, axis=1)
+    nmap = np.asarray(
+        np.sum(smat, axis=1), dtype=np.float32)
     
     vals = np.asarray(
-        rtop["bed_elevation"][:], dtype=np.float32)
+        elev["bed_elevation"][:], dtype=np.float32)
     vals = np.reshape(vals, (vals.size, 1))
 
-    emap = (smat * vals) / np.maximum(+1, nmap)
+    emap = (smat * vals) / np.maximum(1., nmap)
 
     vals = np.asarray(
-        rtop["ocn_thickness"][:], dtype=np.float32)
+        elev["ocn_thickness"][:], dtype=np.float32)
     vals = np.reshape(vals, (vals.size, 1))
 
-    omap = (smat * vals) / np.maximum(+1, nmap)
+    omap = (smat * vals) / np.maximum(1., nmap)
 
     vals = np.asarray(
-        rtop["ice_thickness"][:], dtype=np.float32)
+        elev["ice_thickness"][:], dtype=np.float32)
     vals = np.reshape(vals, (vals.size, 1))
 
-    imap = (smat * vals) / np.maximum(+1, nmap)
+    imap = (smat * vals) / np.maximum(1., nmap)
 
     del smat; del cols; del vals; del near
 
@@ -258,39 +274,35 @@ def rtopo_map(args):
     print("Eval. elevation...")
 
     vals = np.asarray(
-        rtop["bed_elevation"][:], dtype=np.float32)
+        elev["bed_elevation"][:], dtype=np.float32)
 
     ttic = time.time()
-    eint = cell_quad(mesh, 
-        interpolate.RectBivariateSpline(ymid, xmid, vals, kx=1, ky=1))
+    eint = cell_quad(mesh, xlon, ylat, vals)
     ttoc = time.time()
     print("* compute cell integrals:", ttoc - ttic)
 
     vals = np.asarray(
-        rtop["ocn_thickness"][:], dtype=np.float32)
+        elev["ocn_thickness"][:], dtype=np.float32)
 
     ttic = time.time()
-    oint = cell_quad(mesh, 
-        interpolate.RectBivariateSpline(ymid, xmid, vals, kx=1, ky=1))
+    oint = cell_quad(mesh, xlon, ylat, vals)
     ttoc = time.time()
     print("* compute cell integrals:", ttoc - ttic)
 
     vals = np.asarray(
-        rtop["ice_thickness"][:], dtype=np.float32)
+        elev["ice_thickness"][:], dtype=np.float32)
 
     ttic = time.time()
-    iint = cell_quad(mesh, 
-        interpolate.RectBivariateSpline(ymid, xmid, vals, kx=1, ky=1))
+    iint = cell_quad(mesh, xlon, ylat, vals)
     ttoc = time.time()
     print("* compute cell integrals:", ttoc - ttic)
     
-
     print("Save to dataset...")
     
-    ebar = (np.multiply(nmap, emap) + eint) / (1 + nmap)
-    obar = (np.multiply(nmap, omap) + oint) / (1 + nmap)
-    ibar = (np.multiply(nmap, imap) + iint) / (1 + nmap)
-    
+    ebar = (np.multiply(nmap, emap) + 3 * eint) / (3 + nmap)
+    obar = (np.multiply(nmap, omap) + 3 * oint) / (3 + nmap)
+    ibar = (np.multiply(nmap, imap) + 3 * iint) / (3 + nmap)
+  
     if ("bed_elevation" in mesh.variables.keys()):
         mesh["bed_elevation"][:] = ebar
     else:
@@ -322,7 +334,7 @@ if (__name__ == "__main__"):
         required=True, help="Path to user MPAS file.")
 
     parser.add_argument(
-        "--rtop-file", dest="rtop_file", type=str,
-        required=True, help="Path to RTopo PIX file.")
+        "--elev-file", dest="elev_file", type=str,
+        required=True, help="Path to DEM pixel file.")
 
-    rtopo_map(parser.parse_args())
+    remap_dem(parser.parse_args())
