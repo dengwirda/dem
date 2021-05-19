@@ -172,7 +172,7 @@ def cell_quad(mesh, xlon, ylat, vals):
     return fbar / abar
 
 
-def remap_dem(args):
+def dem_remap(args):
     """
     Map elevation and ice+ocn-thickness data from a "zipped" 
     RTopo data-set onto the cells in an MPAS mesh.
@@ -299,28 +299,24 @@ def remap_dem(args):
     
     print("Save to dataset...")
     
-    ebar = (np.multiply(nmap, emap) + 3 * eint) / (3 + nmap)
-    obar = (np.multiply(nmap, omap) + 3 * oint) / (3 + nmap)
-    ibar = (np.multiply(nmap, imap) + 3 * iint) / (3 + nmap)
+    ebar = (np.multiply(nmap, emap) + 6 * eint) / (6 + nmap)
+    obar = (np.multiply(nmap, omap) + 6 * oint) / (6 + nmap)
+    ibar = (np.multiply(nmap, imap) + 6 * iint) / (6 + nmap)
   
-    if ("bed_elevation" in mesh.variables.keys()):
-        mesh["bed_elevation"][:] = ebar
-    else:
-        data = mesh.createVariable("bed_elevation", "f8", ("nCells"))
-        data[:] = ebar
+    if ("bed_elevation" not in mesh.variables.keys()):
+        mesh.createVariable("bed_elevation", "f8", ("nCells"))
+    
+    if ("ocn_thickness" not in mesh.variables.keys()):
+        mesh.createVariable("ocn_thickness", "f8", ("nCells"))
+    
+    if ("ice_thickness" not in mesh.variables.keys()):
+        mesh.createVariable("ice_thickness", "f8", ("nCells"))
 
-    if ("ocn_thickness" in mesh.variables.keys()):
-        mesh["ocn_thickness"][:] = obar
-    else:
-        data = mesh.createVariable("ocn_thickness", "f8", ("nCells"))
-        data[:] = obar
-
-    if ("ice_thickness" in mesh.variables.keys()):
-        mesh["ice_thickness"][:] = ibar
-    else:
-        data = mesh.createVariable("ice_thickness", "f8", ("nCells"))
-        data[:] = ibar
-
+    mesh["bed_elevation"][:] = ebar
+    mesh["ocn_thickness"][:] = obar
+    mesh["ice_thickness"][:] = ibar
+    
+    elev.close()
     mesh.close()
 
 
@@ -331,10 +327,10 @@ if (__name__ == "__main__"):
 
     parser.add_argument(
         "--mpas-file", dest="mpas_file", type=str,
-        required=True, help="Path to user MPAS file.")
+        required=True, help="Name of user MPAS mesh.")
 
     parser.add_argument(
         "--elev-file", dest="elev_file", type=str,
-        required=True, help="Path to DEM pixel file.")
+        required=True, help="Name of DEM pixel file.")
 
-    remap_dem(parser.parse_args())
+    dem_remap(parser.parse_args())
