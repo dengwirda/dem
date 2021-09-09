@@ -1,4 +1,5 @@
 
+import time
 import numpy as np
 import netCDF4 as nc
 import argparse
@@ -43,6 +44,10 @@ def dem_trnsf(args):
 #-- culling shouldn't introduce fp round-off - but truncate 
 #-- anyway...
 
+    print("Build cell-to-cell maps...")
+    
+    ttic = time.time()
+
     xpos = np.round(xpos, decimals=8)
 
 #-- use stable sorting to bring matching cell xyz (and idx)
@@ -65,29 +70,76 @@ def dem_trnsf(args):
         diff[:, 1] == 0, 
         diff[:, 2] == 0))).ravel()
 
+    ttoc = time.time()
+
+    print("* built cell-to-cell map:",
+          np.round(ttoc - ttic, decimals=1), "sec")
+
 #-- cell inew in part matches iold in base - re-index elev.
 #-- data-sets
 
+    print("Transfer elevation data...")
+
+    ttic = time.time()
+
     inew = xidx[same + 1]
     iold = xidx[same + 0]
-    
-    if ("bed_elevation" not in base.variables.keys() or 
-        "ocn_thickness" not in base.variables.keys() or
-        "ice_thickness" not in base.variables.keys()):
-        raise Exception("Base does not contain elev. data!")
 
-    if ("bed_elevation" not in part.variables.keys()):
-        part.createVariable("bed_elevation", "f8", ("nCells"))
+#-- reindex cell elevation variables
+
+    if ("bed_elevation" in base.variables.keys()):
+        if ("bed_elevation" not in part.variables.keys()):
+            part.createVariable("bed_elevation", "f4", ("nCells"))
     
-    if ("ocn_thickness" not in part.variables.keys()):
-        part.createVariable("ocn_thickness", "f8", ("nCells"))
+        part["bed_elevation"][inew] = base["bed_elevation"][iold]
+
+    if ("ocn_thickness" in base.variables.keys()):
+        if ("ocn_thickness" not in part.variables.keys()):
+            part.createVariable("ocn_thickness", "f4", ("nCells"))
     
-    if ("ice_thickness" not in part.variables.keys()):
-        part.createVariable("ice_thickness", "f8", ("nCells"))
+        part["ocn_thickness"][inew] = base["ocn_thickness"][iold]
+
+    if ("ice_thickness" in base.variables.keys()):
+        if ("ice_thickness" not in part.variables.keys()):
+            part.createVariable("ice_thickness", "f4", ("nCells"))
+    
+        part["ice_thickness"][inew] = base["ice_thickness"][iold]
+
+#-- reindex cell histogram varaibles
+
+    if ("nProfiles" in base.dimensions.keys()):
+        if ("nProfiles" not in part.dimensions.keys()):
+            part.createDimension(
+                "nProfiles", base.dimensions["nProfiles"].size)
+
+    if ("bed_elevation_profile" in base.variables.keys()):
+        if ("bed_elevation_profile" not in part.variables.keys()):
+            part.createVariable("bed_elevation_profile", 
+                                "f4", ("nCells", "nProfiles"))
+
+        part["bed_elevation_profile"][inew, :] = \
+            base["bed_elevation_profile"][iold, :]
+
+    if ("ocn_thickness_profile" in base.variables.keys()):
+        if ("ocn_thickness_profile" not in part.variables.keys()):
+            part.createVariable("ocn_thickness_profile", 
+                                "f4", ("nCells", "nProfiles"))
+
+        part["ocn_thickness_profile"][inew, :] = \
+            base["ocn_thickness_profile"][iold, :]
+
+    if ("ice_thickness_profile" in base.variables.keys()):
+        if ("ice_thickness_profile" not in part.variables.keys()):
+            part.createVariable("ice_thickness_profile", 
+                                "f4", ("nCells", "nProfiles"))
+
+        part["ice_thickness_profile"][inew, :] = \
+            base["ice_thickness_profile"][iold, :]
         
-    part["bed_elevation"][inew] = base["bed_elevation"][iold]
-    part["ocn_thickness"][inew] = base["ocn_thickness"][iold]
-    part["ice_thickness"][inew] = base["ice_thickness"][iold]
+    ttoc = time.time()
+
+    print("* reindex elevation data:",
+          np.round(ttoc - ttic, decimals=1), "sec")
 
     base.close()
     part.close()
