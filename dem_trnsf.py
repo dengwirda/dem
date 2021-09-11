@@ -93,6 +93,12 @@ def dem_trnsf(args):
     
         part["bed_elevation"][inew] = base["bed_elevation"][iold]
 
+    if ("bed_slope" in base.variables.keys()):
+        if ("bed_slope" not in part.variables.keys()):
+            part.createVariable("bed_slope", "f4", ("nCells"))
+    
+        part["bed_slope"][inew] = base["bed_slope"][iold]
+
     if ("ocn_thickness" in base.variables.keys()):
         if ("ocn_thickness" not in part.variables.keys()):
             part.createVariable("ocn_thickness", "f4", ("nCells"))
@@ -119,6 +125,14 @@ def dem_trnsf(args):
 
         part["bed_elevation_profile"][inew, :] = \
             base["bed_elevation_profile"][iold, :]
+
+    if ("bed_slope_profile" in base.variables.keys()):
+        if ("bed_slope_profile" not in part.variables.keys()):
+            part.createVariable("bed_slope_profile", 
+                                "f4", ("nCells", "nProfiles"))
+
+        part["bed_slope_profile"][inew, :] = \
+            base["bed_slope_profile"][iold, :]
 
     if ("ocn_thickness_profile" in base.variables.keys()):
         if ("ocn_thickness_profile" not in part.variables.keys()):

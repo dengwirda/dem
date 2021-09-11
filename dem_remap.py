@@ -35,16 +35,19 @@ def map_to_r3(mesh, xlon, ylat, head, tail):
         (xpos.ravel(), ypos.ravel(), zpos.ravel())).T
 
 
-def tria_area(rs, pa, pb, pc):
+def tria_area(pa, pb, pc, rs=1.):
     """
     Calculate areas of spherical triangles [PA, PB, PC] on a
     sphere of radius RS.    
 
     """
     
-    lena = circ_dist(1., pa, pb)
-    lenb = circ_dist(1., pb, pc)
-    lenc = circ_dist(1., pc, pa)
+    lena = circ_dist(
+        pa[:, 0], pa[:, 1], pb[:, 0], pb[:, 1], 1.)
+    lenb = circ_dist(
+        pb[:, 0], pb[:, 1], pc[:, 0], pc[:, 1], 1.)
+    lenc = circ_dist(
+        pc[:, 0], pc[:, 1], pa[:, 0], pa[:, 1], 1.)
 
     slen = 0.5 * (lena + lenb + lenc)
 
@@ -58,19 +61,19 @@ def tria_area(rs, pa, pb, pc):
     return edel * rs ** 2
 
 
-def circ_dist(rs, pa, pb):
+def circ_dist(xa, ya, xb, yb, rs=1.):
     """
     Calculate geodesic-length of great circles [PA, PB] on a
     sphere of radius RS.    
 
     """
 
-    dlon = .5 * (pa[:, 0] - pb[:, 0])
-    dlat = .5 * (pa[:, 1] - pb[:, 1])
+    dlon = .5 * (xa - xb)
+    dlat = .5 * (ya - yb)
 
     dist = 2. * rs * np.arcsin(np.sqrt(
         np.sin(dlat) ** 2 +
-        np.sin(dlon) ** 2 * np.cos(pa[:, 1]) * np.cos(pb[:, 1])
+        np.sin(dlon) ** 2 * np.cos(ya) * np.cos(yb)
     ))
 
     return dist
@@ -291,7 +294,7 @@ def cell_quad(mesh, xlon, ylat, vals):
         rsph = mesh.sphere_radius
 
         atri = tria_area(
-            rsph, pcel[icel], pvrt[ivrt], pvrt[jvrt])
+            pcel[icel], pvrt[ivrt], pvrt[jvrt], rsph)
 
         atri = np.reshape(atri, (atri.size, 1))
 
@@ -357,6 +360,127 @@ def cell_prfl(mesh, smat,
     return prfl
 
 
+def cell_dzdx(mesh, xlon, ylat, vals):
+
+
+    print("Building slopes...")
+
+    cols = xlon.size - 2
+    rows = ylat.size - 2
+
+    rsph = mesh.sphere_radius
+
+    xmid = .5 * (xlon[:-1:] + xlon[1::]) 
+    xmid = xmid * np.pi / 180.
+    ymid = .5 * (ylat[:-1:] + ylat[1::]) 
+    ymid = ymid * np.pi / 180.
+
+    ridx, icol = np.ogrid[:rows+1, :cols+1]
+
+    dzdx = np.zeros((
+        rows + 1, cols + 1), dtype=np.float32)
+
+    indx = np.asarray(np.round(
+        np.linspace(-1, rows, 13)), dtype=np.int64)
+
+    print("* process tiles:")
+
+    for tile in range(0, indx.size - 1):
+
+        ttic = time.time()
+
+        head = indx[tile + 0] + 1
+        tail = indx[tile + 1] + 1
+
+        slab = tail - head + 0
+
+        irow = ridx[head:tail]
+
+        zdel = np.zeros((
+            slab + 0, cols + 1, 8), dtype=np.int16)
+
+        zero = 0
+        wcol = icol - 1; wcol[wcol < zero] = cols
+        ecol = icol + 1; ecol[ecol > cols] = zero
+        nrow = irow + 1; nrow[nrow > rows] = rows
+        srow = irow - 1; srow[srow < zero] = zero
+
+    #-- index D8 neighbours =
+    #-- NN, EE, SS, WW, NE, SE, SW, NW
+
+        zdel[:, :, 0] = np.abs(
+            vals[nrow, icol] - vals[irow, icol])
+        zdel[:, :, 1] = np.abs(
+            vals[irow, ecol] - vals[irow, icol])
+        zdel[:, :, 2] = np.abs(
+            vals[srow, icol] - vals[irow, icol])
+        zdel[:, :, 3] = np.abs(
+            vals[irow, wcol] - vals[irow, icol])
+
+        zdel[:, :, 4] = np.abs(
+            vals[nrow, ecol] - vals[irow, icol])
+        zdel[:, :, 5] = np.abs(
+            vals[srow, ecol] - vals[irow, icol])
+        zdel[:, :, 6] = np.abs(
+            vals[srow, wcol] - vals[irow, icol])
+        zdel[:, :, 7] = np.abs(
+            vals[nrow, wcol] - vals[irow, icol])
+
+        imax = np.argmax(zdel, axis=2)
+
+        dist = np.zeros((
+            slab + 0, cols + 1), dtype=np.float32)
+
+        dadj = circ_dist(xmid[icol], ymid[irow], 
+                         xmid[icol], ymid[nrow])
+
+        dist[imax==0] = dadj[imax==0]
+
+        dadj = circ_dist(xmid[icol], ymid[irow], 
+                         xmid[ecol], ymid[irow])
+
+        dist[imax==1] = dadj[imax==1]
+
+        dadj = circ_dist(xmid[icol], ymid[irow], 
+                         xmid[icol], ymid[srow])
+
+        dist[imax==2] = dadj[imax==2]
+
+        dadj = circ_dist(xmid[icol], ymid[irow], 
+                         xmid[wcol], ymid[irow])
+
+        dist[imax==3] = dadj[imax==3]
+
+        dadj = circ_dist(xmid[icol], ymid[irow], 
+                         xmid[ecol], ymid[nrow])
+
+        dist[imax==4] = dadj[imax==4]
+
+        dadj = circ_dist(xmid[icol], ymid[irow], 
+                         xmid[ecol], ymid[srow])
+
+        dist[imax==5] = dadj[imax==5]
+
+        dadj = circ_dist(xmid[icol], ymid[irow], 
+                         xmid[wcol], ymid[srow])
+        
+        dist[imax==6] = dadj[imax==6]
+
+        dadj = circ_dist(xmid[icol], ymid[irow], 
+                         xmid[wcol], ymid[nrow])
+
+        dist[imax==7] = dadj[imax==7]
+        
+        dzdx[irow, icol] = \
+            np.max(zdel, axis=2) / dist / rsph
+    
+        ttoc = time.time()
+        print("* compute local D8 slope:",
+            np.round(ttoc - ttic, decimals=1), "sec")
+
+    return dzdx
+
+
 def dem_remap(args):
     """
     Map elevation and ice+ocn-thickness data from a "zipped" 
@@ -371,9 +495,27 @@ def dem_remap(args):
 
     print("Loading assests...")
 
-    elev = nc.Dataset(args.elev_file, "r")
+    elev = nc.Dataset(args.elev_file, "r+")
     mesh = nc.Dataset(args.mpas_file, "r+")
 
+    xlon = np.asarray(elev["lon"][:], dtype=np.float64)
+    ylat = np.asarray(elev["lat"][:], dtype=np.float64)
+
+    if ("bed_slope" not in elev.variables.keys()):
+
+#-- Inject the "bed-slope" variable into the DEM struct., if 
+#-- it's not already available.
+
+        vals = np.asarray(
+            elev["bed_elevation"][:], dtype=np.int16)
+
+        vals = cell_dzdx(mesh, xlon, ylat, vals)
+
+        elev.createVariable(
+            "bed_slope", "f4", ("num_row", "num_col"))
+
+        elev["bed_slope"][:, :] = vals[:, :]
+    
 #-- Compute an approximate remapping, associating pixels in
 #-- the DEM with cells in the MPAS mesh. Since polygons are
 #-- Voronoi, the point-in-cell query can be computed by
@@ -392,14 +534,11 @@ def dem_remap(args):
 
     print("Remap elevation...")
 
-    xlon = np.asarray(elev["lon"][:], dtype=np.float64)
-    ylat = np.asarray(elev["lat"][:], dtype=np.float64)
-
     xmid = .5 * (xlon[:-1:] + xlon[1::])
     ymid = .5 * (ylat[:-1:] + ylat[1::])
 
     indx = np.asarray(np.round(
-        np.linspace(-1, ymid.size, 17)), dtype=int)
+        np.linspace(-1, ymid.size, 13)), dtype=int)
 
     print("* process tiles:")
 
@@ -452,6 +591,12 @@ def dem_remap(args):
     emap = (smat * vals) / np.maximum(1., nmap)
 
     vals = np.asarray(
+        elev["bed_slope"][:], dtype=np.float32)
+    vals = np.reshape(vals, (vals.size, 1))
+
+    smap = (smat * vals) / np.maximum(1., nmap)
+
+    vals = np.asarray(
         elev["ocn_thickness"][:], dtype=np.float32)
     vals = np.reshape(vals, (vals.size, 1))
 
@@ -487,6 +632,15 @@ def dem_remap(args):
           np.round(ttoc - ttic, decimals=1), "sec")
 
     vals = np.asarray(
+        elev["bed_slope"][:], dtype=np.float32)
+
+    ttic = time.time()
+    svrt, scel, sint = cell_quad(mesh, xlon, ylat, vals)
+    ttoc = time.time()
+    print("* compute cell integrals:", 
+          np.round(ttoc - ttic, decimals=1), "sec")
+
+    vals = np.asarray(
         elev["ocn_thickness"][:], dtype=np.float32)
 
     ttic = time.time()
@@ -507,11 +661,15 @@ def dem_remap(args):
     print("Save to dataset...")
     
     ebar = (np.multiply(nmap, emap) + 6 * eint) / (6 + nmap)
+    sbar = (np.multiply(nmap, smap) + 6 * sint) / (6 + nmap)
     obar = (np.multiply(nmap, omap) + 6 * oint) / (6 + nmap)
     ibar = (np.multiply(nmap, imap) + 6 * iint) / (6 + nmap)
   
     if ("bed_elevation" not in mesh.variables.keys()):
         mesh.createVariable("bed_elevation", "f4", ("nCells"))
+
+    if ("bed_slope" not in mesh.variables.keys()):
+        mesh.createVariable("bed_slope", "f4", ("nCells"))
     
     if ("ocn_thickness" not in mesh.variables.keys()):
         mesh.createVariable("ocn_thickness", "f4", ("nCells"))
@@ -523,7 +681,10 @@ def dem_remap(args):
     mesh["ocn_thickness"][:] = obar
     mesh["ice_thickness"][:] = ibar
 
-    del emap; del eint
+    mesh["bed_slope"][:] = \
+        np.arctan(sbar) * 180. / np.pi  # degrees, for ELM
+
+    del emap; del eint; del smap; del sint
     del omap; del oint; del imap; del iint
 
 #-- Also compute profiles (ie. histograms) of elev. outputs
@@ -539,6 +700,17 @@ def dem_remap(args):
     ttic = time.time()
     eprf = cell_prfl(
         mesh, smat, NLEV, vals, evrt, ecel, ebar)
+    ttoc = time.time()
+    print("* compute elev. profiles:", 
+          np.round(ttoc - ttic, decimals=1), "sec")
+
+    vals = np.asarray(
+        elev["bed_slope"][:], dtype=np.float32)
+    vals = np.reshape(vals, (vals.size))
+
+    ttic = time.time()
+    sprf = cell_prfl(
+        mesh, smat, NLEV, vals, svrt, scel, sbar)
     ttoc = time.time()
     print("* compute elev. profiles:", 
           np.round(ttoc - ttic, decimals=1), "sec")
@@ -573,6 +745,10 @@ def dem_remap(args):
     if ("bed_elevation_profile" not in mesh.variables.keys()):
         mesh.createVariable("bed_elevation_profile", 
                             "f4", ("nCells", "nProfiles"))
+
+    if ("bed_slope_profile" not in mesh.variables.keys()):
+        mesh.createVariable("bed_slope_profile", 
+                            "f4", ("nCells", "nProfiles"))
     
     if ("ocn_thickness_profile" not in mesh.variables.keys()):
         mesh.createVariable("ocn_thickness_profile", 
@@ -583,6 +759,7 @@ def dem_remap(args):
                             "f4", ("nCells", "nProfiles"))
 
     mesh["bed_elevation_profile"][:, :] = eprf
+    mesh["bed_slope_profile"][:, :] = sprf
     mesh["ocn_thickness_profile"][:, :] = oprf
     mesh["ice_thickness_profile"][:, :] = iprf
 
