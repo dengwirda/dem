@@ -27,9 +27,9 @@ def blend_front(e1st, i1st, e2nd, halo, sdev):
         e1st.shape, halo + 1, dtype=np.float32)
 
     nidx = np.full(
-        e1st.shape[0], False, dtype=np.bool)
+        e1st.shape[0], False, dtype=bool)
     sidx = np.full(
-        e1st.shape[0], False, dtype=np.bool)
+        e1st.shape[0], False, dtype=bool)
 
     bnds = np.asarray(np.round(
         np.linspace(0, e1st.shape[0], 5)), dtype=np.uint32)
