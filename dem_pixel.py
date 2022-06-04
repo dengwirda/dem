@@ -312,7 +312,6 @@ def rtopo_15sec(args):
     elev = np.asarray(np.round(znew), dtype=np.int16)
 
 
-    """
     data = nc.Dataset(os.path.join(
         args.elev_path, 
         "RTopo-2.0.4_30sec_surface_elevation.nc"), "r")
@@ -377,8 +376,6 @@ def rtopo_15sec(args):
     iceh[base == 0] = 0
 
     ocnh = np.maximum(0, base - elev)
-    """
-
 
     xpos = np.linspace(
         -180., +180., elev.shape[1] + 1, dtype=np.float64)
@@ -409,7 +406,6 @@ def rtopo_15sec(args):
     data.units = "m"
     data[:, :] = elev
     
-    """
     data = root.createVariable(
         "ice_thickness", "i2", ("num_row", "num_col"))
     data.units = "m"
@@ -418,8 +414,7 @@ def rtopo_15sec(args):
         "ocn_thickness", "i2", ("num_row", "num_col"))
     data.units = "m"
     data[:, :] = ocnh
-    """
-
+    
     root.close()
 
 
