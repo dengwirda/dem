@@ -273,6 +273,156 @@ def rtopo_30sec(args):
     root.close()
 
 
+def rtopo_15sec(args):
+    """
+    Create a zipped and pixel centred version of RTopo 2.0.4
+    (15 arc-sec) to support remapping of elevation data.
+
+    """
+
+    print("Making RTopo-2.0.4 (15 arc-sec) pixel...")
+
+    data = nc.Dataset(os.path.join(
+        args.elev_path, 
+        "RTopo-2.0.4_30sec_bedrock_topography.nc"), "r")
+    
+    data.set_auto_maskandscale(False)  # quite valid_min/max
+
+    elev = np.asarray(
+        data["bedrock_topography"][:], dtype=np.float32)
+
+    zmid = (elev[:-1:, :-1:] + elev[+1::, :-1:] + 
+            elev[:-1:, +1::] + elev[+1::, +1::]) / 4.
+
+    zlhs = (elev[:-1:, :-1:] + elev[+1::, :-1:]) / 2.
+    zrhs = (elev[:-1:, +1::] + elev[+1::, +1::]) / 2.
+    zbot = (elev[:-1:, :-1:] + elev[:-1:, +1::]) / 2.
+    ztop = (elev[+1::, :-1:] + elev[+1::, +1::]) / 2.
+
+    znew = np.zeros((43200, 86400), dtype=np.float32)
+    znew[0::2, 0::2] = (
+        elev[:-1:, :-1:] + zbot + zmid + zlhs) / 4.
+    znew[0::2, 1::2] = (
+        zbot + elev[:-1:, +1::] + zrhs + zmid) / 4.
+    znew[1::2, 1::2] = (
+        zmid + zrhs + elev[+1::, +1::] + ztop) / 4.
+    znew[1::2, 0::2] = (
+        zlhs + zmid + ztop + elev[+1::, :-1:]) / 4.
+
+    elev = np.asarray(np.round(znew), dtype=np.int16)
+
+
+    """
+    data = nc.Dataset(os.path.join(
+        args.elev_path, 
+        "RTopo-2.0.4_30sec_surface_elevation.nc"), "r")
+    
+    data.set_auto_maskandscale(False)  # quite valid_min/max
+
+    surf = np.asarray(
+        data["surface_elevation"][:], dtype=np.float32)
+
+    zmid = (surf[:-1:, :-1:] + surf[+1::, :-1:] + 
+            surf[:-1:, +1::] + surf[+1::, +1::]) / 4.
+
+    zlhs = (surf[:-1:, :-1:] + surf[+1::, :-1:]) / 2.
+    zrhs = (surf[:-1:, +1::] + surf[+1::, +1::]) / 2.
+    zbot = (surf[:-1:, :-1:] + surf[:-1:, +1::]) / 2.
+    ztop = (surf[+1::, :-1:] + surf[+1::, +1::]) / 2.
+
+    znew = np.zeros((43200, 86400), dtype=np.float32)
+    znew[0::2, 0::2] = (
+        surf[:-1:, :-1:] + zbot + zmid + zlhs) / 4.
+    znew[0::2, 1::2] = (
+        zbot + surf[:-1:, +1::] + zrhs + zmid) / 4.
+    znew[1::2, 1::2] = (
+        zmid + zrhs + surf[+1::, +1::] + ztop) / 4.
+    znew[1::2, 0::2] = (
+        zlhs + zmid + ztop + surf[+1::, :-1:]) / 4.
+
+    surf = np.asarray(np.round(znew), dtype=np.int16)
+
+
+    data = nc.Dataset(os.path.join(
+        args.elev_path, 
+        "RTopo-2.0.4_30sec_ice_base_topography.nc"), "r")
+
+    data.set_auto_maskandscale(False)  # quite valid_min/max
+    
+    base = np.asarray(
+        data["ice_base_topography"][:], dtype=np.float32)
+
+    zmid = (base[:-1:, :-1:] + base[+1::, :-1:] + 
+            base[:-1:, +1::] + base[+1::, +1::]) / 4.
+
+    zlhs = (base[:-1:, :-1:] + base[+1::, :-1:]) / 2.
+    zrhs = (base[:-1:, +1::] + base[+1::, +1::]) / 2.
+    zbot = (base[:-1:, :-1:] + base[:-1:, +1::]) / 2.
+    ztop = (base[+1::, :-1:] + base[+1::, +1::]) / 2.
+
+    znew = np.zeros((43200, 86400), dtype=np.float32)
+    znew[0::2, 0::2] = (
+        base[:-1:, :-1:] + zbot + zmid + zlhs) / 4.
+    znew[0::2, 1::2] = (
+        zbot + base[:-1:, +1::] + zrhs + zmid) / 4.
+    znew[1::2, 1::2] = (
+        zmid + zrhs + base[+1::, +1::] + ztop) / 4.
+    znew[1::2, 0::2] = (
+        zlhs + zmid + ztop + base[+1::, :-1:]) / 4.
+
+    base = np.asarray(np.round(znew), dtype=np.int16)
+    
+
+    iceh = surf - base
+    iceh[base == 0] = 0
+
+    ocnh = np.maximum(0, base - elev)
+    """
+
+
+    xpos = np.linspace(
+        -180., +180., elev.shape[1] + 1, dtype=np.float64)
+    ypos = np.linspace(
+        -90.0, +90.0, elev.shape[0] + 1, dtype=np.float64)
+
+    root = nc.Dataset(
+        os.path.join(
+            args.save_path, "RTopo_2_0_4_15sec_pixel.nc"),
+        "w", format="NETCDF4")
+    root.description = "A zipped RTopo-2.0.4 (15 arc-sec) " + \
+        "data-set, pixel centred and compressed to int16_t."
+    root.source = "RTopo-2.0.4_30sec_data.nc"
+    root.references = "doi.pangaea.de/10.1594/PANGAEA.905295"
+    root.createDimension("num_lon", elev.shape[1] + 1)
+    root.createDimension("num_col", elev.shape[1])    
+    root.createDimension("num_lat", elev.shape[0] + 1)
+    root.createDimension("num_row", elev.shape[0])
+
+    data = root.createVariable("lon", "f8", ("num_lon"))
+    data.units = "degrees_east"
+    data[:] = xpos
+    data = root.createVariable("lat", "f8", ("num_lat"))
+    data.units = "degrees_north"
+    data[:] = ypos
+    data = root.createVariable(
+        "bed_elevation", "i2", ("num_row", "num_col"))
+    data.units = "m"
+    data[:, :] = elev
+    
+    """
+    data = root.createVariable(
+        "ice_thickness", "i2", ("num_row", "num_col"))
+    data.units = "m"
+    data[:, :] = iceh
+    data = root.createVariable(
+        "ocn_thickness", "i2", ("num_row", "num_col"))
+    data.units = "m"
+    data[:, :] = ocnh
+    """
+
+    root.close()
+
+
 def srtmp_60sec(args):
     """
     Create a zipped and pixel centred version of SRTM15+V2.1
@@ -545,15 +695,15 @@ def rtopo_srtmp_30sec(args):
 
 def gebco_60sec(args):
     """
-    Create a zipped and pixel centred version of GEBCO[2020]
+    Create a zipped and pixel centred version of GEBCO[2021]
     (15 arc-sec) at 60 arc-sec.
 
     """
 
-    print("Making GEBCO[2020] (60 arc-sec) pixel...")
+    print("Making GEBCO[2021] (60 arc-sec) pixel...")
 
     data = nc.Dataset(os.path.join(
-        args.elev_path, "GEBCO_2020.nc"), "r")
+        args.elev_path, "GEBCO_2021_sub.nc"), "r")
 
     elev = np.asarray(
         data["elevation"][:], dtype=np.float32)
@@ -577,7 +727,7 @@ def gebco_60sec(args):
 
     root = nc.Dataset(
         os.path.join(
-            args.save_path, "GEBCO_v2020_60sec_pixel.nc"),
+            args.save_path, "GEBCO_v2021_60sec_pixel.nc"),
         "w", format="NETCDF4")
     root.createDimension("num_lon", elev.shape[1] + 1)
     root.createDimension("num_col", elev.shape[1])    
@@ -591,7 +741,7 @@ def gebco_60sec(args):
     data.units = "degrees_north"
     data[:] = ypos
     data = root.createVariable(
-        "top_elevation", "i2", ("num_row", "num_col"))
+        "bed_elevation", "i2", ("num_row", "num_col"))
     data.units = "m"
     data[:, :] = elev
     
@@ -600,15 +750,15 @@ def gebco_60sec(args):
 
 def gebco_30sec(args):
     """
-    Create a zipped and pixel centred version of GEBCO[2020]
+    Create a zipped and pixel centred version of GEBCO[2021]
     (15 arc-sec) at 30 arc-sec.
 
     """
 
-    print("Making GEBCO[2020] (30 arc-sec) pixel...")
+    print("Making GEBCO[2021] (30 arc-sec) pixel...")
 
     data = nc.Dataset(os.path.join(
-        args.elev_path, "GEBCO_2020.nc"), "r")
+        args.elev_path, "GEBCO_2021_sub.nc"), "r")
 
     elev = np.asarray(
         data["elevation"][:], dtype=np.float32)
@@ -632,7 +782,7 @@ def gebco_30sec(args):
 
     root = nc.Dataset(
         os.path.join(
-            args.save_path, "GEBCO_v2020_30sec_pixel.nc"), 
+            args.save_path, "GEBCO_v2021_30sec_pixel.nc"), 
         "w", format="NETCDF4")
     root.createDimension("num_lon", elev.shape[1] + 1)
     root.createDimension("num_col", elev.shape[1])    
@@ -646,7 +796,50 @@ def gebco_30sec(args):
     data.units = "degrees_north"
     data[:] = ypos
     data = root.createVariable(
-        "top_elevation", "i2", ("num_row", "num_col"))
+        "bed_elevation", "i2", ("num_row", "num_col"))
+    data.units = "m"
+    data[:, :] = elev
+    
+    root.close()
+
+
+def gebco_15sec(args):
+    """
+    Create a zipped and pixel centred version of GEBCO[2021]
+    (15 arc-sec) at 15 arc-sec.
+
+    """
+
+    print("Making GEBCO[2021] (15 arc-sec) pixel...")
+
+    data = nc.Dataset(os.path.join(
+        args.elev_path, "GEBCO_2021_sub.nc"), "r")
+
+    elev = np.asarray(
+        data["elevation"][:], dtype=np.int16)
+
+    xpos = np.linspace(
+        -180., +180., elev.shape[1] + 1, dtype=np.float64)
+    ypos = np.linspace(
+        -90.0, +90.0, elev.shape[0] + 1, dtype=np.float64)
+
+    root = nc.Dataset(
+        os.path.join(
+            args.save_path, "GEBCO_v2021_15sec_pixel.nc"), 
+        "w", format="NETCDF4")
+    root.createDimension("num_lon", elev.shape[1] + 1)
+    root.createDimension("num_col", elev.shape[1])    
+    root.createDimension("num_lat", elev.shape[0] + 1)
+    root.createDimension("num_row", elev.shape[0])
+
+    data = root.createVariable("lon", "f8", ("num_lon"))
+    data.units = "degrees_east"
+    data[:] = xpos
+    data = root.createVariable("lat", "f8", ("num_lat"))
+    data.units = "degrees_north"
+    data[:] = ypos
+    data = root.createVariable(
+        "bed_elevation", "i2", ("num_row", "num_col"))
     data.units = "m"
     data[:, :] = elev
     
@@ -656,7 +849,7 @@ def gebco_30sec(args):
 def rtopo_gebco_60sec(args):
     """
     Create a zipped and pixel centred 'blend' of RTopo 2.0.4
-    and GEBCO[2020] at 60 arc-sec.
+    and GEBCO[2021] at 60 arc-sec.
 
     """
 
@@ -675,10 +868,10 @@ def rtopo_gebco_60sec(args):
         data["ocn_thickness"][:], dtype=np.int16)
 
     data = nc.Dataset(os.path.join(
-        args.elev_path, "GEBCO_v2020_60sec_pixel.nc"), "r")
+        args.elev_path, "GEBCO_v2021_60sec_pixel.nc"), "r")
 
     e2nd = np.asarray(
-        data["top_elevation"][:], dtype=np.int16)
+        data["bed_elevation"][:], dtype=np.int16)
 
     mask = blend_front(e1st, i1st, e2nd, halo=20, sdev=2.0)
    
@@ -696,14 +889,14 @@ def rtopo_gebco_60sec(args):
 
     root = nc.Dataset(
         os.path.join(args.save_path, 
-            "RTopo_2_0_4_GEBCO_v2020_60sec_pixel.nc"),
+            "RTopo_2_0_4_GEBCO_v2021_60sec_pixel.nc"),
         "w", format="NETCDF4")
     root.description = "Blend of RTopo-2.0.4 (60 arc-sec) " + \
-        "and GEBCO[2020] (15 arc-sec) - pixel centred and " + \
+        "and GEBCO[2021] (15 arc-sec) - pixel centred and " + \
         "compressed to int16_t. RTopo data used under ice " + \
         "sheets/shelves. Remapped to 60 arc-sec."
     root.source = \
-        "RTopo-2.0.4_1min_data.nc and GEBCO_2020.nc"
+        "RTopo-2.0.4_1min_data.nc and GEBCO_2021.nc"
     root.references = \
         "doi.pangaea.de/10.1594/PANGAEA.905295 and " + \
         "doi.org/10.5285/a29c5465-b138-234d-e053-6c86abc040b9"
@@ -737,7 +930,7 @@ def rtopo_gebco_60sec(args):
 def rtopo_gebco_30sec(args):
     """
     Create a zipped and pixel centred 'blend' of RTopo 2.0.4
-    and GEBCO[2020] at 30 arc-sec.
+    and GEBCO[2021] at 30 arc-sec.
 
     """
 
@@ -756,10 +949,10 @@ def rtopo_gebco_30sec(args):
         data["ocn_thickness"][:], dtype=np.int16)
 
     data = nc.Dataset(os.path.join(
-        args.elev_path, "GEBCO_v2020_30sec_pixel.nc"), "r")
+        args.elev_path, "GEBCO_v2021_30sec_pixel.nc"), "r")
 
     e2nd = np.asarray(
-        data["top_elevation"][:], dtype=np.int16)
+        data["bed_elevation"][:], dtype=np.int16)
 
     mask = blend_front(e1st, i1st, e2nd, halo=40, sdev=4.0)
    
@@ -777,14 +970,95 @@ def rtopo_gebco_30sec(args):
 
     root = nc.Dataset(
         os.path.join(args.save_path, 
-            "RTopo_2_0_4_GEBCO_v2020_30sec_pixel.nc"),
+            "RTopo_2_0_4_GEBCO_v2021_30sec_pixel.nc"),
         "w", format="NETCDF4")
     root.description = "Blend of RTopo-2.0.4 (30 arc-sec) " + \
-        "and GEBCO[2020] (15 arc-sec) - pixel centred and " + \
+        "and GEBCO[2021] (15 arc-sec) - pixel centred and " + \
         "compressed to int16_t. RTopo data used under ice " + \
         "sheets/shelves. Remapped to 30 arc-sec."
     root.source = \
-        "RTopo-2.0.4_30sec_data.nc and GEBCO_2020.nc"
+        "RTopo-2.0.4_30sec_data.nc and GEBCO_2021.nc"
+    root.references = \
+        "doi.pangaea.de/10.1594/PANGAEA.905295 and " + \
+        "doi.org/10.5285/a29c5465-b138-234d-e053-6c86abc040b9"
+    root.createDimension("num_lon", elev.shape[1] + 1)
+    root.createDimension("num_col", elev.shape[1])    
+    root.createDimension("num_lat", elev.shape[0] + 1)
+    root.createDimension("num_row", elev.shape[0])
+
+    data = root.createVariable("lon", "f8", ("num_lon"))
+    data.units = "degrees_east"
+    data[:] = xpos
+    data = root.createVariable("lat", "f8", ("num_lat"))
+    data.units = "degrees_north"
+    data[:] = ypos
+    data = root.createVariable(
+        "bed_elevation", "i2", ("num_row", "num_col"))
+    data.units = "m"
+    data[:, :] = elev
+    data = root.createVariable(
+        "ice_thickness", "i2", ("num_row", "num_col"))
+    data.units = "m"
+    data[:, :] = iceh
+    data = root.createVariable(
+        "ocn_thickness", "i2", ("num_row", "num_col"))
+    data.units = "m"
+    data[:, :] = ocnh
+    
+    root.close()
+
+
+def rtopo_gebco_15sec(args):
+    """
+    Create a zipped and pixel centred 'blend' of RTopo 2.0.4
+    and GEBCO[2021] at 15 arc-sec.
+
+    """
+
+    print("Making RTopo-GEBCO (15 arc-sec) blend...")
+    
+    data = nc.Dataset(os.path.join(
+        args.elev_path, "RTopo_2_0_4_15sec_pixel.nc"), "r")
+
+    e1st = np.asarray(
+        data["bed_elevation"][:], dtype=np.int16)
+
+    i1st = np.asarray(
+        data["ice_thickness"][:], dtype=np.int16)
+
+    o1st = np.asarray(
+        data["ocn_thickness"][:], dtype=np.int16)
+
+    data = nc.Dataset(os.path.join(
+        args.elev_path, "GEBCO_v2021_15sec_pixel.nc"), "r")
+
+    e2nd = np.asarray(
+        data["bed_elevation"][:], dtype=np.int16)
+
+    mask = blend_front(e1st, i1st, e2nd, halo=40, sdev=4.0)
+   
+    elev = np.asarray(np.round(
+        (1. - mask) * e1st + mask * e2nd), dtype=np.int16)  
+
+    iceh = i1st
+    ocnh = o1st
+    ocnh[i1st == 0] = np.maximum(0, -elev[i1st == 0])
+    
+    xpos = np.linspace(
+        -180., +180., elev.shape[1] + 1, dtype=np.float64)
+    ypos = np.linspace(
+        -90.0, +90.0, elev.shape[0] + 1, dtype=np.float64)
+
+    root = nc.Dataset(
+        os.path.join(args.save_path, 
+            "RTopo_2_0_4_GEBCO_v2021_15sec_pixel.nc"),
+        "w", format="NETCDF4")
+    root.description = "Blend of RTopo-2.0.4 (30 arc-sec) " + \
+        "and GEBCO[2021] (15 arc-sec) - pixel centred and " + \
+        "compressed to int16_t. RTopo data used under ice " + \
+        "sheets/shelves. Remapped to 30 arc-sec."
+    root.source = \
+        "RTopo-2.0.4_30sec_data.nc and GEBCO_2021.nc"
     root.references = \
         "doi.pangaea.de/10.1594/PANGAEA.905295 and " + \
         "doi.org/10.5285/a29c5465-b138-234d-e053-6c86abc040b9"
@@ -830,22 +1104,14 @@ if (__name__ == "__main__"):
         required=False, 
         default="", help="Path to store output data.")
 
-    rtopo_60sec(parser.parse_args())
+   #rtopo_60sec(parser.parse_args())
     rtopo_30sec(parser.parse_args())
+    rtopo_15sec(parser.parse_args())
 
-    """
-    SRTM15+V2.1 data seems to include high-freq 'noise'
-    near coastlines, so don't use for now...
-
-    srtmp_60sec(parser.parse_args())
-    srtmp_30sec(parser.parse_args())
-
-    rtopo_srtmp_60sec(parser.parse_args())
-    rtopo_srtmp_30sec(parser.parse_args())
-    """    
-
-    gebco_60sec(parser.parse_args())
+   #gebco_60sec(parser.parse_args())
     gebco_30sec(parser.parse_args())
+    gebco_15sec(parser.parse_args())
     
-    rtopo_gebco_60sec(parser.parse_args())
+   #rtopo_gebco_60sec(parser.parse_args())
     rtopo_gebco_30sec(parser.parse_args())
+    rtopo_gebco_15sec(parser.parse_args())

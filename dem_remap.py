@@ -277,7 +277,7 @@ def cell_quad(mesh, xlon, ylat, vals):
     edge = base()
     edge.vert = mesh.variables["verticesOnEdge"][:]
     
-    abar = np.zeros((ncel, 1), dtype=np.float32)
+    abar = np.zeros((ncel, 1), dtype=np.float64)
     fbar = np.zeros((ncel, 1), dtype=np.float32)
 
     for epos in range(np.max(cell.topo)):
@@ -362,7 +362,6 @@ def cell_prfl(mesh, smat,
 
 def cell_dzdx(mesh, xlon, ylat, vals):
 
-
     print("Building slopes...")
 
     cols = xlon.size - 2
@@ -381,7 +380,7 @@ def cell_dzdx(mesh, xlon, ylat, vals):
         rows + 1, cols + 1), dtype=np.float32)
 
     indx = np.asarray(np.round(
-        np.linspace(-1, rows, 13)), dtype=np.int64)
+        np.linspace(-1, rows, 17)), dtype=np.int64)
 
     print("* process tiles:")
 
@@ -426,53 +425,56 @@ def cell_dzdx(mesh, xlon, ylat, vals):
         zdel[:, :, 7] = np.abs(
             vals[nrow, wcol] - vals[irow, icol])
 
-        imax = np.argmax(zdel, axis=2)
-
-        dist = np.zeros((
-            slab + 0, cols + 1), dtype=np.float32)
-
-        dadj = circ_dist(xmid[icol], ymid[irow], 
+        dist = circ_dist(xmid[icol], ymid[irow], 
                          xmid[icol], ymid[nrow])
 
-        dist[imax==0] = dadj[imax==0]
+        dist += 1.E-12
+        zdel[:, :, 0] /= dist
 
-        dadj = circ_dist(xmid[icol], ymid[irow], 
+        dist = circ_dist(xmid[icol], ymid[irow], 
                          xmid[ecol], ymid[irow])
 
-        dist[imax==1] = dadj[imax==1]
+        dist += 1.E-12
+        zdel[:, :, 1] /= dist
 
-        dadj = circ_dist(xmid[icol], ymid[irow], 
+        dist = circ_dist(xmid[icol], ymid[irow], 
                          xmid[icol], ymid[srow])
 
-        dist[imax==2] = dadj[imax==2]
+        dist += 1.E-12
+        zdel[:, :, 2] /= dist
 
-        dadj = circ_dist(xmid[icol], ymid[irow], 
+        dist = circ_dist(xmid[icol], ymid[irow], 
                          xmid[wcol], ymid[irow])
 
-        dist[imax==3] = dadj[imax==3]
+        dist += 1.E-12
+        zdel[:, :, 3] /= dist
 
-        dadj = circ_dist(xmid[icol], ymid[irow], 
+        dist = circ_dist(xmid[icol], ymid[irow], 
                          xmid[ecol], ymid[nrow])
 
-        dist[imax==4] = dadj[imax==4]
+        dist += 1.E-12
+        zdel[:, :, 4] /= dist
 
-        dadj = circ_dist(xmid[icol], ymid[irow], 
+        dist = circ_dist(xmid[icol], ymid[irow], 
                          xmid[ecol], ymid[srow])
 
-        dist[imax==5] = dadj[imax==5]
+        dist += 1.E-12
+        zdel[:, :, 5] /= dist
 
-        dadj = circ_dist(xmid[icol], ymid[irow], 
+        dist = circ_dist(xmid[icol], ymid[irow], 
                          xmid[wcol], ymid[srow])
-        
-        dist[imax==6] = dadj[imax==6]
 
-        dadj = circ_dist(xmid[icol], ymid[irow], 
+        dist += 1.E-12        
+        zdel[:, :, 6] /= dist
+
+        dist = circ_dist(xmid[icol], ymid[irow], 
                          xmid[wcol], ymid[nrow])
 
-        dist[imax==7] = dadj[imax==7]
+        dist += 1.E-12
+        zdel[:, :, 7] /= dist
         
         dzdx[irow, icol] = \
-            np.max(zdel, axis=2) / dist / rsph
+            np.cbrt(np.mean(zdel**3, axis=2)) / rsph
     
         ttoc = time.time()
         print("* compute local D8 slope:",
@@ -538,7 +540,7 @@ def dem_remap(args):
     ymid = .5 * (ylat[:-1:] + ylat[1::])
 
     indx = np.asarray(np.round(
-        np.linspace(-1, ymid.size, 13)), dtype=int)
+        np.linspace(-1, ymid.size, 17)), dtype=int)
 
     print("* process tiles:")
 
@@ -602,15 +604,23 @@ def dem_remap(args):
 
     omap = (smat * vals) / np.maximum(1., nmap)
 
+    frac = np.zeros(vals.shape, dtype=vals.dtype)
+    frac[vals > 0.0] = 1.
+    ofrc = (smat * frac) / np.maximum(1., nmap)
+
     vals = np.asarray(
         elev["ice_thickness"][:], dtype=np.float32)
     vals = np.reshape(vals, (vals.size, 1))
 
     imap = (smat * vals) / np.maximum(1., nmap)
 
+    frac = np.zeros(vals.shape, dtype=vals.dtype)
+    frac[vals > 0.0] = 1.
+    ifrc = (smat * frac) / np.maximum(1., nmap)
+
     ttoc = time.time()
 
-    del cols; del vals; del near
+    del cols; del vals; del near; del frac
 
     print("* built remapping matrix:", 
           np.round(ttoc - ttic, decimals=1), "sec")
@@ -684,8 +694,18 @@ def dem_remap(args):
     mesh["bed_slope"][:] = \
         np.arctan(sbar) * 180. / np.pi  # degrees, for ELM
 
+    if ("ocn_cover" not in mesh.variables.keys()):
+        mesh.createVariable("ocn_cover", "f4", ("nCells"))
+    
+    if ("ice_cover" not in mesh.variables.keys()):
+        mesh.createVariable("ice_cover", "f4", ("nCells"))
+
+    mesh["ocn_cover"][:] = ofrc
+    mesh["ice_cover"][:] = ifrc
+
     del emap; del eint; del smap; del sint
     del omap; del oint; del imap; del iint
+    del ofrc; del ifrc
 
 #-- Also compute profiles (ie. histograms) of elev. outputs
 #-- per cell, dividing distributions of DEM pixel
