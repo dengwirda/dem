@@ -1051,7 +1051,7 @@ def rtopo_gebco_15sec(args):
     root.description = "Blend of RTopo-2.0.4 (30 arc-sec) " + \
         "and GEBCO[2021] (15 arc-sec) - pixel centred and " + \
         "compressed to int16_t. RTopo data used under ice " + \
-        "sheets/shelves. Remapped to 30 arc-sec."
+        "sheets/shelves. Remapped to 15 arc-sec."
     root.source = \
         "RTopo-2.0.4_30sec_data.nc and GEBCO_2021.nc"
     root.references = \
