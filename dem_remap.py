@@ -396,7 +396,7 @@ def cell_dzdx(mesh, xlon, ylat, vals):
         irow = ridx[head:tail]
 
         zdel = np.zeros((
-            slab + 0, cols + 1, 8), dtype=np.int16)
+            slab + 0, cols + 1, 8), dtype=np.float32)
 
         zero = 0
         wcol = icol - 1; wcol[wcol < zero] = cols
