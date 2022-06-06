@@ -278,7 +278,7 @@ def cell_quad(mesh, xlon, ylat, vals):
     edge.vert = mesh.variables["verticesOnEdge"][:]
     
     abar = np.zeros((ncel, 1), dtype=np.float64)
-    fbar = np.zeros((ncel, 1), dtype=np.float32)
+    fbar = np.zeros((ncel, 1), dtype=np.float64)
 
     for epos in range(np.max(cell.topo)):
 
@@ -305,7 +305,9 @@ def cell_quad(mesh, xlon, ylat, vals):
         abar[icel] += atri
         fbar[icel] += atri * ftri / 3.
 
-    return fvrt, fcel, fbar / abar
+    fbar = np.asarray(fbar / abar, dtype=np.float32)
+
+    return fvrt, fcel, fbar
 
 
 def cell_prfl(mesh, smat, 
@@ -576,6 +578,8 @@ def dem_remap(args):
 
     smat = csr_matrix((vals, (near, cols)))
     
+    del near; del cols; del vals
+
     nmap = np.asarray(
         smat.sum(axis=1), dtype=np.float32)
     
@@ -620,7 +624,7 @@ def dem_remap(args):
 
     ttoc = time.time()
 
-    del cols; del vals; del near; del frac
+    del vals; del frac
 
     print("* built remapping matrix:", 
           np.round(ttoc - ttic, decimals=1), "sec")
