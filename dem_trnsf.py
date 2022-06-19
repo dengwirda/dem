@@ -43,7 +43,7 @@ def dem_trnsf(args):
 #-- culling shouldn't introduce fp round-off - but truncate 
 #-- anyway...
 
-    xpos = np.round(xpos, decimals=8)
+    xpos = np.round(xpos, decimals=9)
 
 #-- use stable sorting to bring matching cell xyz (and idx)
 #-- into "ascending" order
@@ -75,25 +75,74 @@ def dem_trnsf(args):
         if ("bed_elevation" not in part.variables.keys()):
             part.createVariable("bed_elevation", "f4", ("nCells"))
     
-        part["bed_elevation"][inew] = base["bed_elevation"][iold]
+        btmp = np.asarray(
+            base["bed_elevation"][:], dtype=np.float32)
+
+        ncel = part.dimensions["nCells"].size
+
+        ptmp = np.zeros(ncel, dtype=np.float32)
+        ptmp[inew] = btmp[iold]
+
+        part["bed_elevation"][:] = ptmp
+
+    if ("bed_slope" in base.variables.keys()):
+        if ("bed_slope" not in part.variables.keys()):
+            part.createVariable("bed_slope", "f4", ("nCells"))
+    
+        btmp = np.asarray(
+            base["bed_slope"][:], dtype=np.float32)
+
+        ncel = part.dimensions["nCells"].size
+
+        ptmp = np.zeros(ncel, dtype=np.float32)
+        ptmp[inew] = btmp[iold]
+
+        part["bed_slope"][:] = ptmp
 
     if ("ocn_thickness" not in part.variables.keys()):
         if ("ocn_thickness" not in part.variables.keys()):
             part.createVariable("ocn_thickness", "f4", ("nCells"))
     
-        part["ocn_thickness"][inew] = base["ocn_thickness"][iold]
+        btmp = np.asarray(
+            base["ocn_thickness"][:], dtype=np.float32)
+
+        ncel = part.dimensions["nCells"].size
+
+        ptmp = np.zeros(ncel, dtype=np.float32)
+        ptmp[inew] = btmp[iold]
+
+        part["ocn_thickness"][:] = ptmp
 
     if ("ice_thickness" not in part.variables.keys()):
         if ("ice_thickness" not in part.variables.keys()):
             part.createVariable("ice_thickness", "f4", ("nCells"))
     
-        part["ice_thickness"][inew] = base["ice_thickness"][iold]
+        btmp = np.asarray(
+            base["ice_thickness"][:], dtype=np.float32)
+
+        ncel = part.dimensions["nCells"].size
+
+        ptmp = np.zeros(ncel, dtype=np.float32)
+        ptmp[inew] = btmp[iold]
+
+        part["ice_thickness"][:] = ptmp
 
 
     if ("bed_elevation_profile" in base.variables.keys()):
         if ("bed_elevation_profile" not in part.variables.keys()):
             part.createVariable("bed_elevation_profile", 
                                 "f4", ("nCells", "nProfiles"))
+
+        btmp = np.asarray(
+            base["bed_elevation_profile"][:, :], dtype=np.float32)
+
+        ncel = part.dimensions["nCells"].size
+        nprf = part.dimensions["nProfiles"].size
+
+        ptmp = np.zeros((ncel, nprf), dtype=np.float32)
+        ptmp[inew, :] = btmp[iold, :]
+
+        part["bed_elevation_profile"][:, :] = ptmp
 
         part["bed_elevation_profile"][inew, :] = \
             base["bed_elevation_profile"][iold, :]
@@ -103,16 +152,32 @@ def dem_trnsf(args):
             part.createVariable("ocn_thickness_profile", 
                                 "f4", ("nCells", "nProfiles"))
 
-        part["ocn_thickness_profile"][inew, :] = \
-            base["ocn_thickness_profile"][iold, :]
+        btmp = np.asarray(
+            base["ocn_thickness_profile"][:, :], dtype=np.float32)
+
+        ncel = part.dimensions["nCells"].size
+        nprf = part.dimensions["nProfiles"].size
+
+        ptmp = np.zeros((ncel, nprf), dtype=np.float32)
+        ptmp[inew, :] = btmp[iold, :]
+
+        part["ocn_thickness_profile"][:, :] = ptmp
 
     if ("ice_thickness_profile" in base.variables.keys()):
         if ("ice_thickness_profile" not in part.variables.keys()):
             part.createVariable("ice_thickness_profile", 
                                 "f4", ("nCells", "nProfiles"))
 
-        part["ice_thickness_profile"][inew, :] = \
-            base["ice_thickness_profile"][iold, :]
+        btmp = np.asarray(
+            base["ice_thickness_profile"][:, :], dtype=np.float32)
+
+        ncel = part.dimensions["nCells"].size
+        nprf = part.dimensions["nProfiles"].size
+
+        ptmp = np.zeros((ncel, nprf), dtype=np.float32)
+        ptmp[inew, :] = btmp[iold, :]
+
+        part["ice_thickness_profile"][:, :] = ptmp
 
     base.close()
     part.close()
