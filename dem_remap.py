@@ -431,52 +431,52 @@ def cell_dzdx(mesh, xlon, ylat, vals):
                          xmid[icol], ymid[nrow])
 
         dist += 1.E-12
-        zdel[:, :, 0] /= dist
+        zdel[:, :, 0] /= dist * rsph
 
         dist = circ_dist(xmid[icol], ymid[irow], 
                          xmid[ecol], ymid[irow])
 
         dist += 1.E-12
-        zdel[:, :, 1] /= dist
+        zdel[:, :, 1] /= dist * rsph
 
         dist = circ_dist(xmid[icol], ymid[irow], 
                          xmid[icol], ymid[srow])
 
         dist += 1.E-12
-        zdel[:, :, 2] /= dist
+        zdel[:, :, 2] /= dist * rsph
 
         dist = circ_dist(xmid[icol], ymid[irow], 
                          xmid[wcol], ymid[irow])
 
         dist += 1.E-12
-        zdel[:, :, 3] /= dist
+        zdel[:, :, 3] /= dist * rsph
 
         dist = circ_dist(xmid[icol], ymid[irow], 
                          xmid[ecol], ymid[nrow])
 
         dist += 1.E-12
-        zdel[:, :, 4] /= dist
+        zdel[:, :, 4] /= dist * rsph
 
         dist = circ_dist(xmid[icol], ymid[irow], 
                          xmid[ecol], ymid[srow])
 
         dist += 1.E-12
-        zdel[:, :, 5] /= dist
+        zdel[:, :, 5] /= dist * rsph
 
         dist = circ_dist(xmid[icol], ymid[irow], 
                          xmid[wcol], ymid[srow])
 
         dist += 1.E-12        
-        zdel[:, :, 6] /= dist
+        zdel[:, :, 6] /= dist * rsph
 
         dist = circ_dist(xmid[icol], ymid[irow], 
                          xmid[wcol], ymid[nrow])
 
         dist += 1.E-12
-        zdel[:, :, 7] /= dist
+        zdel[:, :, 7] /= dist * rsph
         
         dzdx[irow, icol] = \
-            np.cbrt(np.mean(zdel**3, axis=2)) / rsph
+            np.cbrt(np.mean(zdel**3, axis=2))
     
         ttoc = time.time()
         print("* compute local D8 slope:",
@@ -573,22 +573,18 @@ def dem_remap(args):
 
     ttic = time.time()
 
+    ncel = mesh.dimensions["nCells"].size
+
     cols = np.arange(0, near.size)
     vals = np.ones(near.size, dtype=np.int8)
 
-    smat = csr_matrix((vals, (near, cols)))
+    smat = csr_matrix((vals, (near, cols)), 
+        shape=(ncel, near.size), dtype=np.int8)
     
     del near; del cols; del vals
 
     nmap = np.asarray(
         smat.sum(axis=1), dtype=np.float32)
-    
-    print("* min.(per-cell) =", 
-          np.floor(np.min(nmap)).astype(int))
-    print("* mean(per-cell) =", 
-          np.floor(np.mean(nmap)).astype(int))
-    print("* |per-cell < 5| =", 
-          np.count_nonzero(nmap < 5))
 
     vals = np.asarray(
         elev["bed_elevation"][:], dtype=np.float32)
@@ -674,11 +670,19 @@ def dem_remap(args):
     
     print("Save to dataset...")
     
-    ebar = (np.multiply(nmap, emap) + 6 * eint) / (6 + nmap)
-    sbar = (np.multiply(nmap, smap) + 6 * sint) / (6 + nmap)
-    obar = (np.multiply(nmap, omap) + 6 * oint) / (6 + nmap)
-    ibar = (np.multiply(nmap, imap) + 6 * iint) / (6 + nmap)
+    ebar = (np.multiply(nmap, emap) + 9 * eint) / (9 + nmap)
+    sbar = (np.multiply(nmap, smap) + 9 * sint) / (9 + nmap)
+    obar = (np.multiply(nmap, omap) + 9 * oint) / (9 + nmap)
+    ibar = (np.multiply(nmap, imap) + 9 * iint) / (9 + nmap)
   
+    tfrc = np.zeros(ofrc.shape, dtype=np.float32)
+    tfrc[ebar < -1./2.] = 1.
+    ofrc = (np.multiply(nmap, ofrc) + 9 * tfrc) / (9 + nmap)
+
+    tfrc = np.zeros(ofrc.shape, dtype=np.float32)
+    tfrc[ibar > +1./2.] = 1.
+    ifrc = (np.multiply(nmap, ifrc) + 9 * tfrc) / (9 + nmap)
+
     if ("bed_elevation" not in mesh.variables.keys()):
         mesh.createVariable("bed_elevation", "f4", ("nCells"))
 
@@ -714,6 +718,8 @@ def dem_remap(args):
 #-- Also compute profiles (ie. histograms) of elev. outputs
 #-- per cell, dividing distributions of DEM pixel
 #-- values into NLEV-1 bands. Write band endpoints to file.
+
+    if (args.elev_band <= 0): return
 
     print("Eval. histogram...")
 
