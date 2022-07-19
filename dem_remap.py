@@ -476,7 +476,7 @@ def cell_dzdx(mesh, xlon, ylat, vals):
         zdel[:, :, 7] /= dist * rsph
         
         dzdx[irow, icol] = \
-            np.cbrt(np.mean(zdel**3, axis=2))
+            np.sqrt(np.mean(zdel**2, axis=2))
     
         ttoc = time.time()
         print("* compute local D8 slope:",
