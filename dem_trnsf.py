@@ -43,7 +43,7 @@ def dem_trnsf(args):
 #-- culling shouldn't introduce fp round-off - but truncate 
 #-- anyway...
 
-    xpos = np.round(xpos, decimals=8)
+    xpos = np.round(xpos, decimals=9)
 
 #-- use stable sorting to bring matching cell xyz (and idx)
 #-- into "ascending" order
@@ -70,24 +70,142 @@ def dem_trnsf(args):
 
     inew = xidx[same + 1]
     iold = xidx[same + 0]
-    
-    if ("bed_elevation" not in base.variables.keys() or 
-        "ocn_thickness" not in base.variables.keys() or
-        "ice_thickness" not in base.variables.keys()):
-        raise Exception("Base does not contain elev. data!")
 
-    if ("bed_elevation" not in part.variables.keys()):
-        part.createVariable("bed_elevation", "f8", ("nCells"))
+    if ("bed_elevation" in base.variables.keys()):
+        if ("bed_elevation" not in part.variables.keys()):
+            part.createVariable("bed_elevation", "f4", ("nCells"))
     
-    if ("ocn_thickness" not in part.variables.keys()):
-        part.createVariable("ocn_thickness", "f8", ("nCells"))
+        btmp = np.asarray(
+            base["bed_elevation"][:], dtype=np.float32)
+
+        ncel = part.dimensions["nCells"].size
+
+        ptmp = np.zeros(ncel, dtype=np.float32)
+        ptmp[inew] = btmp[iold]
+
+        part["bed_elevation"][:] = ptmp
+
+    if ("bed_slope" in base.variables.keys()):
+        if ("bed_slope" not in part.variables.keys()):
+            part.createVariable("bed_slope", "f4", ("nCells"))
     
-    if ("ice_thickness" not in part.variables.keys()):
-        part.createVariable("ice_thickness", "f8", ("nCells"))
+        btmp = np.asarray(
+            base["bed_slope"][:], dtype=np.float32)
+
+        ncel = part.dimensions["nCells"].size
+
+        ptmp = np.zeros(ncel, dtype=np.float32)
+        ptmp[inew] = btmp[iold]
+
+        part["bed_slope"][:] = ptmp
         
-    part["bed_elevation"][inew] = base["bed_elevation"][iold]
-    part["ocn_thickness"][inew] = base["ocn_thickness"][iold]
-    part["ice_thickness"][inew] = base["ice_thickness"][iold]
+    if ("bed_dz_dx" in base.variables.keys()):
+        if ("bed_dz_dx" not in part.variables.keys()):
+            part.createVariable("bed_dz_dx", "f4", ("nCells"))
+    
+        btmp = np.asarray(
+            base["bed_dz_dx"][:], dtype=np.float32)
+
+        ncel = part.dimensions["nCells"].size
+
+        ptmp = np.zeros(ncel, dtype=np.float32)
+        ptmp[inew] = btmp[iold]
+
+        part["bed_dz_dx"][:] = ptmp
+        
+    if ("bed_dz_dy" in base.variables.keys()):
+        if ("bed_dz_dy" not in part.variables.keys()):
+            part.createVariable("bed_dz_dy", "f4", ("nCells"))
+    
+        btmp = np.asarray(
+            base["bed_dz_dy"][:], dtype=np.float32)
+
+        ncel = part.dimensions["nCells"].size
+
+        ptmp = np.zeros(ncel, dtype=np.float32)
+        ptmp[inew] = btmp[iold]
+
+        part["bed_dz_dy"][:] = ptmp
+
+    if ("ocn_thickness" not in part.variables.keys()):
+        if ("ocn_thickness" not in part.variables.keys()):
+            part.createVariable("ocn_thickness", "f4", ("nCells"))
+    
+        btmp = np.asarray(
+            base["ocn_thickness"][:], dtype=np.float32)
+
+        ncel = part.dimensions["nCells"].size
+
+        ptmp = np.zeros(ncel, dtype=np.float32)
+        ptmp[inew] = btmp[iold]
+
+        part["ocn_thickness"][:] = ptmp
+
+    if ("ice_thickness" not in part.variables.keys()):
+        if ("ice_thickness" not in part.variables.keys()):
+            part.createVariable("ice_thickness", "f4", ("nCells"))
+    
+        btmp = np.asarray(
+            base["ice_thickness"][:], dtype=np.float32)
+
+        ncel = part.dimensions["nCells"].size
+
+        ptmp = np.zeros(ncel, dtype=np.float32)
+        ptmp[inew] = btmp[iold]
+
+        part["ice_thickness"][:] = ptmp
+
+
+    if ("bed_elevation_profile" in base.variables.keys()):
+        if ("bed_elevation_profile" not in part.variables.keys()):
+            part.createVariable("bed_elevation_profile", 
+                                "f4", ("nCells", "nProfiles"))
+
+        btmp = np.asarray(
+            base["bed_elevation_profile"][:, :], dtype=np.float32)
+
+        ncel = part.dimensions["nCells"].size
+        nprf = part.dimensions["nProfiles"].size
+
+        ptmp = np.zeros((ncel, nprf), dtype=np.float32)
+        ptmp[inew, :] = btmp[iold, :]
+
+        part["bed_elevation_profile"][:, :] = ptmp
+
+        part["bed_elevation_profile"][inew, :] = \
+            base["bed_elevation_profile"][iold, :]
+
+    if ("ocn_thickness_profile" in base.variables.keys()):
+        if ("ocn_thickness_profile" not in part.variables.keys()):
+            part.createVariable("ocn_thickness_profile", 
+                                "f4", ("nCells", "nProfiles"))
+
+        btmp = np.asarray(
+            base["ocn_thickness_profile"][:, :], dtype=np.float32)
+
+        ncel = part.dimensions["nCells"].size
+        nprf = part.dimensions["nProfiles"].size
+
+        ptmp = np.zeros((ncel, nprf), dtype=np.float32)
+        ptmp[inew, :] = btmp[iold, :]
+
+        part["ocn_thickness_profile"][:, :] = ptmp
+
+    if ("ice_thickness_profile" in base.variables.keys()):
+        if ("ice_thickness_profile" not in part.variables.keys()):
+            part.createVariable("ice_thickness_profile", 
+                                "f4", ("nCells", "nProfiles"))
+
+        btmp = np.asarray(
+            base["ice_thickness_profile"][:, :], dtype=np.float32)
+
+        ncel = part.dimensions["nCells"].size
+        nprf = part.dimensions["nProfiles"].size
+
+        ptmp = np.zeros((ncel, nprf), dtype=np.float32)
+        ptmp[inew, :] = btmp[iold, :]
+
+        part["ice_thickness_profile"][:, :] = ptmp
 
     base.close()
     part.close()
