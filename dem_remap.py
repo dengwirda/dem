@@ -610,7 +610,7 @@ def dem_remap(args):
               np.round(ttoc - ttic, decimals=1), "sec")
         
         nset.append(nloc)
-s
+        
     near = np.concatenate(nset)
     
     del tree; del qpos; del nset; del nloc
