@@ -550,15 +550,15 @@ def dem_remap(args):
         vals, dzdx, dzdy = \
             cell_dzdx(mesh, xlon, ylat, vals, rsph)
 
-        if ("bed_slope" not in mesh.variables.keys()):
+        if ("bed_slope" not in elev.variables.keys()):
             elev.createVariable(
             "bed_slope", "f4", ("num_row", "num_col"))
 
-        if ("bed_dz_dx" not in mesh.variables.keys()):
+        if ("bed_dz_dx" not in elev.variables.keys()):
             elev.createVariable(
             "bed_dz_dx", "f4", ("num_row", "num_col"))
             
-        if ("bed_dz_dy" not in mesh.variables.keys()):
+        if ("bed_dz_dy" not in elev.variables.keys()):
             elev.createVariable(
             "bed_dz_dy", "f4", ("num_row", "num_col"))
 
