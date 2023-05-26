@@ -9,7 +9,6 @@ import argparse
 
 # Authors: Darren Engwirda
 
-
 def map_to_r3(mesh, xlon, ylat, head, tail):
     """
     Map lon-lat coordinates to XYZ points. Restricted to the 
@@ -362,14 +361,12 @@ def cell_prfl(mesh, smat,
     return prfl
 
 
-def cell_dzdx(mesh, xlon, ylat, vals):
+def cell_dzdx(mesh, xlon, ylat, vals, rsph):
 
     print("Building slopes...")
 
     cols = xlon.size - 2
     rows = ylat.size - 2
-
-    rsph = mesh.sphere_radius
 
     xmid = .5 * (xlon[:-1:] + xlon[1::]) 
     xmid = xmid * np.pi / 180.
@@ -378,7 +375,12 @@ def cell_dzdx(mesh, xlon, ylat, vals):
 
     ridx, icol = np.ogrid[:rows+1, :cols+1]
 
+    dzds = np.zeros((
+        rows + 1, cols + 1), dtype=np.float32)
+        
     dzdx = np.zeros((
+        rows + 1, cols + 1), dtype=np.float32)
+    dzdy = np.zeros((
         rows + 1, cols + 1), dtype=np.float32)
 
     indx = np.asarray(np.round(
@@ -399,12 +401,37 @@ def cell_dzdx(mesh, xlon, ylat, vals):
 
         zdel = np.zeros((
             slab + 0, cols + 1, 8), dtype=np.float32)
+            
+        xdel = np.zeros((
+            slab + 0, cols + 1, 1), dtype=np.float32)
+        ydel = np.zeros((
+            slab + 0, cols + 1, 1), dtype=np.float32)
 
         zero = 0
         wcol = icol - 1; wcol[wcol < zero] = cols
         ecol = icol + 1; ecol[ecol > cols] = zero
         nrow = irow + 1; nrow[nrow > rows] = rows
         srow = irow - 1; srow[srow < zero] = zero
+
+    #-- index D4 neighbours
+
+        xdel[:, :, 0] = \
+            vals[irow, ecol] - vals[irow, wcol]
+            
+        dist = circ_dist(xmid[ecol], ymid[irow], 
+                         xmid[wcol], ymid[irow])
+                         
+        dist += 1.E-12
+        xdel[:, :, 0] /= dist * rsph
+            
+        ydel[:, :, 0] = \
+            vals[nrow, icol] - vals[srow, icol]
+            
+        dist = circ_dist(xmid[icol], ymid[nrow], 
+                         xmid[icol], ymid[srow])
+         
+        dist += 1.E-12
+        ydel[:, :, 0] /= dist * rsph                
 
     #-- index D8 neighbours =
     #-- NN, EE, SS, WW, NE, SE, SW, NW
@@ -475,14 +502,17 @@ def cell_dzdx(mesh, xlon, ylat, vals):
         dist += 1.E-12
         zdel[:, :, 7] /= dist * rsph
         
-        dzdx[irow, icol] = \
+        dzds[irow, icol] = \
             np.sqrt(np.mean(zdel**2, axis=2))
+            
+        dzdx[irow, icol] = xdel[:, :, 0]
+        dzdy[irow, icol] = ydel[:, :, 0]
     
         ttoc = time.time()
         print("* compute local D8 slope:",
             np.round(ttoc - ttic, decimals=1), "sec")
 
-    return dzdx
+    return dzds, dzdx, dzdy
 
 
 def dem_remap(args):
@@ -505,7 +535,9 @@ def dem_remap(args):
     xlon = np.asarray(elev["lon"][:], dtype=np.float64)
     ylat = np.asarray(elev["lat"][:], dtype=np.float64)
 
-    if ("bed_slope" not in elev.variables.keys()):
+    if ("bed_slope" not in elev.variables.keys() or
+        "bed_dz_dx" not in elev.variables.keys() or
+        "bed_dz_dy" not in elev.variables.keys()):
 
 #-- Inject the "bed-slope" variable into the DEM struct., if 
 #-- it's not already available.
@@ -513,12 +545,26 @@ def dem_remap(args):
         vals = np.asarray(
             elev["bed_elevation"][:], dtype=np.int16)
 
-        vals = cell_dzdx(mesh, xlon, ylat, vals)
+        rsph = args.elev_sph_radius
 
-        elev.createVariable(
+        vals, dzdx, dzdy = \
+            cell_dzdx(mesh, xlon, ylat, vals, rsph)
+
+        if ("bed_slope" not in mesh.variables.keys()):
+            elev.createVariable(
             "bed_slope", "f4", ("num_row", "num_col"))
 
+        if ("bed_dz_dx" not in mesh.variables.keys()):
+            elev.createVariable(
+            "bed_dz_dx", "f4", ("num_row", "num_col"))
+            
+        if ("bed_dz_dy" not in mesh.variables.keys()):
+            elev.createVariable(
+            "bed_dz_dy", "f4", ("num_row", "num_col"))
+
         elev["bed_slope"][:, :] = vals[:, :]
+        elev["bed_dz_dx"][:, :] = dzdx[:, :]
+        elev["bed_dz_dy"][:, :] = dzdy[:, :]
     
 #-- Compute an approximate remapping, associating pixels in
 #-- the DEM with cells in the MPAS mesh. Since polygons are
@@ -555,13 +601,16 @@ def dem_remap(args):
         qpos = map_to_r3(mesh, xmid, ymid, head, tail)
 
         ttic = time.time()
-        __, nloc = tree.query(qpos, n_jobs=-1)
+        try:  # ridiculous argument renaming...
+            __, nloc = tree.query(qpos, n_jobs=-1)
+        except:
+            __, nloc = tree.query(qpos, workers=-1)
         ttoc = time.time()
         print("* built node-to-cell map:", 
               np.round(ttoc - ttic, decimals=1), "sec")
         
         nset.append(nloc)
-
+s
     near = np.concatenate(nset)
     
     del tree; del qpos; del nset; del nloc
@@ -595,8 +644,26 @@ def dem_remap(args):
     vals = np.asarray(
         elev["bed_slope"][:], dtype=np.float32)
     vals = np.reshape(vals, (vals.size, 1))
+    vals = vals ** 2
 
     smap = (smat * vals) / np.maximum(1., nmap)
+    smap = np.sqrt(smap)
+    
+    vals = np.asarray(
+        elev["bed_dz_dx"][:], dtype=np.float32)
+    vals = np.reshape(vals, (vals.size, 1))
+    vals = vals ** 3
+
+    xmap = (smat * vals) / np.maximum(1., nmap)
+    xmap = np.cbrt(xmap)
+    
+    vals = np.asarray(
+        elev["bed_dz_dy"][:], dtype=np.float32)
+    vals = np.reshape(vals, (vals.size, 1))
+    vals = vals ** 3
+
+    ymap = (smat * vals) / np.maximum(1., nmap)
+    ymap = np.cbrt(ymap)
 
     vals = np.asarray(
         elev["ocn_thickness"][:], dtype=np.float32)
@@ -649,6 +716,24 @@ def dem_remap(args):
     ttoc = time.time()
     print("* compute cell integrals:", 
           np.round(ttoc - ttic, decimals=1), "sec")
+          
+    vals = np.asarray(
+        elev["bed_dz_dx"][:], dtype=np.float32)
+
+    ttic = time.time()
+    xvrt, xcel, xint = cell_quad(mesh, xlon, ylat, vals)
+    ttoc = time.time()
+    print("* compute cell integrals:", 
+          np.round(ttoc - ttic, decimals=1), "sec")
+          
+    vals = np.asarray(
+        elev["bed_dz_dy"][:], dtype=np.float32)
+
+    ttic = time.time()
+    yvrt, ycel, yint = cell_quad(mesh, xlon, ylat, vals)
+    ttoc = time.time()
+    print("* compute cell integrals:", 
+          np.round(ttoc - ttic, decimals=1), "sec")
 
     vals = np.asarray(
         elev["ocn_thickness"][:], dtype=np.float32)
@@ -670,24 +755,32 @@ def dem_remap(args):
     
     print("Save to dataset...")
     
-    ebar = (np.multiply(nmap, emap) + 9 * eint) / (9 + nmap)
-    sbar = (np.multiply(nmap, smap) + 9 * sint) / (9 + nmap)
-    obar = (np.multiply(nmap, omap) + 9 * oint) / (9 + nmap)
-    ibar = (np.multiply(nmap, imap) + 9 * iint) / (9 + nmap)
+    ebar = (np.multiply(nmap, emap) + 1 * eint) / (1 + nmap)
+    sbar = (np.multiply(nmap, smap) + 1 * sint) / (1 + nmap)
+    xbar = (np.multiply(nmap, xmap) + 1 * xint) / (1 + nmap)
+    ybar = (np.multiply(nmap, ymap) + 1 * yint) / (1 + nmap)
+    obar = (np.multiply(nmap, omap) + 1 * oint) / (1 + nmap)
+    ibar = (np.multiply(nmap, imap) + 1 * iint) / (1 + nmap)
   
     tfrc = np.zeros(ofrc.shape, dtype=np.float32)
     tfrc[ebar < -1./2.] = 1.
-    ofrc = (np.multiply(nmap, ofrc) + 9 * tfrc) / (9 + nmap)
+    ofrc = (np.multiply(nmap, ofrc) + 1 * tfrc) / (1 + nmap)
 
     tfrc = np.zeros(ofrc.shape, dtype=np.float32)
     tfrc[ibar > +1./2.] = 1.
-    ifrc = (np.multiply(nmap, ifrc) + 9 * tfrc) / (9 + nmap)
+    ifrc = (np.multiply(nmap, ifrc) + 1 * tfrc) / (1 + nmap)
 
     if ("bed_elevation" not in mesh.variables.keys()):
         mesh.createVariable("bed_elevation", "f4", ("nCells"))
 
     if ("bed_slope" not in mesh.variables.keys()):
         mesh.createVariable("bed_slope", "f4", ("nCells"))
+        
+    if ("bed_dz_dx" not in mesh.variables.keys()):
+        mesh.createVariable("bed_dz_dx", "f4", ("nCells"))
+        
+    if ("bed_dz_dy" not in mesh.variables.keys()):
+        mesh.createVariable("bed_dz_dy", "f4", ("nCells"))
     
     if ("ocn_thickness" not in mesh.variables.keys()):
         mesh.createVariable("ocn_thickness", "f4", ("nCells"))
@@ -698,6 +791,9 @@ def dem_remap(args):
     mesh["bed_elevation"][:] = ebar
     mesh["ocn_thickness"][:] = obar
     mesh["ice_thickness"][:] = ibar
+
+    mesh["bed_dz_dx"][:] = xbar
+    mesh["bed_dz_dy"][:] = ybar
 
     mesh["bed_slope"][:] = \
         np.arctan(sbar) * 180. / np.pi  # degrees, for ELM
@@ -712,6 +808,7 @@ def dem_remap(args):
     mesh["ice_cover"][:] = ifrc
 
     del emap; del eint; del smap; del sint
+    del xmap; del xint; del ymap; del yint
     del omap; del oint; del imap; del iint
     del ofrc; del ifrc
 
@@ -812,7 +909,12 @@ if (__name__ == "__main__"):
 
     parser.add_argument(
         "--elev-band", dest="elev_band", type=int,
-        default=10,
+        default=0,
         required=False, help="Elev. profile band(s).")
+        
+    parser.add_argument(
+        "--elev-sph-radius", dest="elev_sph_radius", type=float,
+        default=6371220.,
+        required=False, help="Radius of sphere for elev. data.")
 
     dem_remap(parser.parse_args())

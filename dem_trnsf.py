@@ -98,6 +98,34 @@ def dem_trnsf(args):
         ptmp[inew] = btmp[iold]
 
         part["bed_slope"][:] = ptmp
+        
+    if ("bed_dz_dx" in base.variables.keys()):
+        if ("bed_dz_dx" not in part.variables.keys()):
+            part.createVariable("bed_dz_dx", "f4", ("nCells"))
+    
+        btmp = np.asarray(
+            base["bed_dz_dx"][:], dtype=np.float32)
+
+        ncel = part.dimensions["nCells"].size
+
+        ptmp = np.zeros(ncel, dtype=np.float32)
+        ptmp[inew] = btmp[iold]
+
+        part["bed_dz_dx"][:] = ptmp
+        
+    if ("bed_dz_dy" in base.variables.keys()):
+        if ("bed_dz_dy" not in part.variables.keys()):
+            part.createVariable("bed_dz_dy", "f4", ("nCells"))
+    
+        btmp = np.asarray(
+            base["bed_dz_dy"][:], dtype=np.float32)
+
+        ncel = part.dimensions["nCells"].size
+
+        ptmp = np.zeros(ncel, dtype=np.float32)
+        ptmp[inew] = btmp[iold]
+
+        part["bed_dz_dy"][:] = ptmp
 
     if ("ocn_thickness" not in part.variables.keys()):
         if ("ocn_thickness" not in part.variables.keys()):
