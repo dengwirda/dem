@@ -3,6 +3,8 @@ import numpy as np
 import netCDF4 as nc
 import argparse
 
+from dem_names import names
+
 # Authors: Darren Engwirda
 
 
@@ -83,6 +85,8 @@ def dem_trnsf(args):
         ptmp = np.zeros(ncel, dtype=np.float32)
         ptmp[inew] = btmp[iold]
 
+        part["bed_elevation"].units = "m"
+        part["bed_elevation"].long_name = names.bed_elevation
         part["bed_elevation"][:] = ptmp
 
     if ("bed_slope" in base.variables.keys()):
@@ -97,6 +101,8 @@ def dem_trnsf(args):
         ptmp = np.zeros(ncel, dtype=np.float32)
         ptmp[inew] = btmp[iold]
 
+        part["bed_slope"].units = "deg"
+        part["bed_slope"].long_name = names.bed_slope_deg
         part["bed_slope"][:] = ptmp
         
     if ("bed_dz_dx" in base.variables.keys()):
@@ -111,6 +117,7 @@ def dem_trnsf(args):
         ptmp = np.zeros(ncel, dtype=np.float32)
         ptmp[inew] = btmp[iold]
 
+        part["bed_dz_dx"].long_name = names.bed_dz_dx
         part["bed_dz_dx"][:] = ptmp
         
     if ("bed_dz_dy" in base.variables.keys()):
@@ -125,6 +132,7 @@ def dem_trnsf(args):
         ptmp = np.zeros(ncel, dtype=np.float32)
         ptmp[inew] = btmp[iold]
 
+        part["bed_dz_dy"].long_name = names.bed_dz_dy
         part["bed_dz_dy"][:] = ptmp
 
     if ("ocn_thickness" not in part.variables.keys()):
@@ -139,6 +147,8 @@ def dem_trnsf(args):
         ptmp = np.zeros(ncel, dtype=np.float32)
         ptmp[inew] = btmp[iold]
 
+        part["ocn_thickness"].units = "m"
+        part["ocn_thickness"].long_name = names.ocn_thickness
         part["ocn_thickness"][:] = ptmp
 
     if ("ice_thickness" not in part.variables.keys()):
@@ -153,6 +163,8 @@ def dem_trnsf(args):
         ptmp = np.zeros(ncel, dtype=np.float32)
         ptmp[inew] = btmp[iold]
 
+        part["ice_thickness"].units = "m"
+        part["ice_thickness"].long_name = names.ice_thickness
         part["ice_thickness"][:] = ptmp
 
 
@@ -170,10 +182,9 @@ def dem_trnsf(args):
         ptmp = np.zeros((ncel, nprf), dtype=np.float32)
         ptmp[inew, :] = btmp[iold, :]
 
+        part["bed_elevation_profile"].units = "m"
+        part["bed_elevation_profile"].long_name = names.bed_elevation_profile
         part["bed_elevation_profile"][:, :] = ptmp
-
-        part["bed_elevation_profile"][inew, :] = \
-            base["bed_elevation_profile"][iold, :]
 
     if ("ocn_thickness_profile" in base.variables.keys()):
         if ("ocn_thickness_profile" not in part.variables.keys()):
@@ -189,6 +200,8 @@ def dem_trnsf(args):
         ptmp = np.zeros((ncel, nprf), dtype=np.float32)
         ptmp[inew, :] = btmp[iold, :]
 
+        part["ocn_thickness_profile"].units = "m"
+        part["ocn_thickness_profile"].long_name = names.ocn_thickness_profile
         part["ocn_thickness_profile"][:, :] = ptmp
 
     if ("ice_thickness_profile" in base.variables.keys()):
@@ -205,6 +218,8 @@ def dem_trnsf(args):
         ptmp = np.zeros((ncel, nprf), dtype=np.float32)
         ptmp[inew, :] = btmp[iold, :]
 
+        part["ice_thickness_profile"].units = "m"
+        part["ice_thickness_profile"].long_name = names.ice_thickness_profile
         part["ice_thickness_profile"][:, :] = ptmp
 
     base.close()

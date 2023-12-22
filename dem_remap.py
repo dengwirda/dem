@@ -7,6 +7,8 @@ from scipy import spatial
 from scipy.sparse import csr_matrix
 import argparse
 
+from dem_names import names
+
 # Authors: Darren Engwirda
 
 def map_to_r3(mesh, xlon, ylat, head, tail):
@@ -361,160 +363,6 @@ def cell_prfl(mesh, smat,
     return prfl
 
 
-def cell_dzdx(mesh, xlon, ylat, vals, rsph):
-
-    print("Building slopes...")
-
-    cols = xlon.size - 2
-    rows = ylat.size - 2
-
-    xmid = .5 * (xlon[:-1:] + xlon[1::]) 
-    xmid = xmid * np.pi / 180.
-    ymid = .5 * (ylat[:-1:] + ylat[1::]) 
-    ymid = ymid * np.pi / 180.
-
-    ridx, icol = np.ogrid[:rows+1, :cols+1]
-
-    dzds = np.zeros((
-        rows + 1, cols + 1), dtype=np.float32)
-        
-    dzdx = np.zeros((
-        rows + 1, cols + 1), dtype=np.float32)
-    dzdy = np.zeros((
-        rows + 1, cols + 1), dtype=np.float32)
-
-    indx = np.asarray(np.round(
-        np.linspace(-1, rows, 17)), dtype=np.int64)
-
-    print("* process tiles:")
-
-    for tile in range(0, indx.size - 1):
-
-        ttic = time.time()
-
-        head = indx[tile + 0] + 1
-        tail = indx[tile + 1] + 1
-
-        slab = tail - head + 0
-
-        irow = ridx[head:tail]
-
-        zdel = np.zeros((
-            slab + 0, cols + 1, 8), dtype=np.float32)
-            
-        xdel = np.zeros((
-            slab + 0, cols + 1, 1), dtype=np.float32)
-        ydel = np.zeros((
-            slab + 0, cols + 1, 1), dtype=np.float32)
-
-        zero = 0
-        wcol = icol - 1; wcol[wcol < zero] = cols
-        ecol = icol + 1; ecol[ecol > cols] = zero
-        nrow = irow + 1; nrow[nrow > rows] = rows
-        srow = irow - 1; srow[srow < zero] = zero
-
-    #-- index D4 neighbours
-
-        xdel[:, :, 0] = \
-            vals[irow, ecol] - vals[irow, wcol]
-            
-        dist = circ_dist(xmid[ecol], ymid[irow], 
-                         xmid[wcol], ymid[irow])
-                         
-        dist += 1.E-12
-        xdel[:, :, 0] /= dist * rsph
-            
-        ydel[:, :, 0] = \
-            vals[nrow, icol] - vals[srow, icol]
-            
-        dist = circ_dist(xmid[icol], ymid[nrow], 
-                         xmid[icol], ymid[srow])
-         
-        dist += 1.E-12
-        ydel[:, :, 0] /= dist * rsph                
-
-    #-- index D8 neighbours =
-    #-- NN, EE, SS, WW, NE, SE, SW, NW
-
-        zdel[:, :, 0] = np.abs(
-            vals[nrow, icol] - vals[irow, icol])
-        zdel[:, :, 1] = np.abs(
-            vals[irow, ecol] - vals[irow, icol])
-        zdel[:, :, 2] = np.abs(
-            vals[srow, icol] - vals[irow, icol])
-        zdel[:, :, 3] = np.abs(
-            vals[irow, wcol] - vals[irow, icol])
-
-        zdel[:, :, 4] = np.abs(
-            vals[nrow, ecol] - vals[irow, icol])
-        zdel[:, :, 5] = np.abs(
-            vals[srow, ecol] - vals[irow, icol])
-        zdel[:, :, 6] = np.abs(
-            vals[srow, wcol] - vals[irow, icol])
-        zdel[:, :, 7] = np.abs(
-            vals[nrow, wcol] - vals[irow, icol])
-
-        dist = circ_dist(xmid[icol], ymid[irow], 
-                         xmid[icol], ymid[nrow])
-
-        dist += 1.E-12
-        zdel[:, :, 0] /= dist * rsph
-
-        dist = circ_dist(xmid[icol], ymid[irow], 
-                         xmid[ecol], ymid[irow])
-
-        dist += 1.E-12
-        zdel[:, :, 1] /= dist * rsph
-
-        dist = circ_dist(xmid[icol], ymid[irow], 
-                         xmid[icol], ymid[srow])
-
-        dist += 1.E-12
-        zdel[:, :, 2] /= dist * rsph
-
-        dist = circ_dist(xmid[icol], ymid[irow], 
-                         xmid[wcol], ymid[irow])
-
-        dist += 1.E-12
-        zdel[:, :, 3] /= dist * rsph
-
-        dist = circ_dist(xmid[icol], ymid[irow], 
-                         xmid[ecol], ymid[nrow])
-
-        dist += 1.E-12
-        zdel[:, :, 4] /= dist * rsph
-
-        dist = circ_dist(xmid[icol], ymid[irow], 
-                         xmid[ecol], ymid[srow])
-
-        dist += 1.E-12
-        zdel[:, :, 5] /= dist * rsph
-
-        dist = circ_dist(xmid[icol], ymid[irow], 
-                         xmid[wcol], ymid[srow])
-
-        dist += 1.E-12        
-        zdel[:, :, 6] /= dist * rsph
-
-        dist = circ_dist(xmid[icol], ymid[irow], 
-                         xmid[wcol], ymid[nrow])
-
-        dist += 1.E-12
-        zdel[:, :, 7] /= dist * rsph
-        
-        dzds[irow, icol] = \
-            np.sqrt(np.mean(zdel**2, axis=2))
-            
-        dzdx[irow, icol] = xdel[:, :, 0]
-        dzdy[irow, icol] = ydel[:, :, 0]
-    
-        ttoc = time.time()
-        print("* compute local D8 slope:",
-            np.round(ttoc - ttic, decimals=1), "sec")
-
-    return dzds, dzdx, dzdy
-
-
 def dem_remap(args):
     """
     Map elevation and ice+ocn-thickness data from a "zipped" 
@@ -535,37 +383,6 @@ def dem_remap(args):
     xlon = np.asarray(elev["lon"][:], dtype=np.float64)
     ylat = np.asarray(elev["lat"][:], dtype=np.float64)
 
-    if ("bed_slope" not in elev.variables.keys() or
-        "bed_dz_dx" not in elev.variables.keys() or
-        "bed_dz_dy" not in elev.variables.keys()):
-
-#-- Inject the "bed-slope" variable into the DEM struct., if 
-#-- it's not already available.
-
-        vals = np.asarray(
-            elev["bed_elevation"][:], dtype=np.int16)
-
-        rsph = args.elev_sph_radius
-
-        vals, dzdx, dzdy = \
-            cell_dzdx(mesh, xlon, ylat, vals, rsph)
-
-        if ("bed_slope" not in elev.variables.keys()):
-            elev.createVariable(
-            "bed_slope", "f4", ("num_row", "num_col"))
-
-        if ("bed_dz_dx" not in elev.variables.keys()):
-            elev.createVariable(
-            "bed_dz_dx", "f4", ("num_row", "num_col"))
-            
-        if ("bed_dz_dy" not in elev.variables.keys()):
-            elev.createVariable(
-            "bed_dz_dy", "f4", ("num_row", "num_col"))
-
-        elev["bed_slope"][:, :] = vals[:, :]
-        elev["bed_dz_dx"][:, :] = dzdx[:, :]
-        elev["bed_dz_dy"][:, :] = dzdy[:, :]
-    
 #-- Compute an approximate remapping, associating pixels in
 #-- the DEM with cells in the MPAS mesh. Since polygons are
 #-- Voronoi, the point-in-cell query can be computed by
@@ -580,7 +397,9 @@ def dem_remap(args):
     ppos[:, 1] = mesh["yCell"][:]
     ppos[:, 2] = mesh["zCell"][:]
 
-    tree = spatial.cKDTree(ppos, leafsize=8)
+    tree = spatial.cKDTree(ppos, leafsize=32)
+
+    alen = np.sqrt(mesh["areaCell"][:])
 
     print("Remap elevation...")
 
@@ -588,7 +407,7 @@ def dem_remap(args):
     ymid = .5 * (ylat[:-1:] + ylat[1::])
 
     indx = np.asarray(np.round(
-        np.linspace(-1, ymid.size, 17)), dtype=int)
+        np.linspace(-1, ymid.size, 32)), dtype=int)
 
     print("* process tiles:")
 
@@ -602,18 +421,22 @@ def dem_remap(args):
 
         ttic = time.time()
         try:  # ridiculous argument renaming...
-            __, nloc = tree.query(qpos, n_jobs=-1)
+            __, cell = tree.query(qpos, n_jobs=-1)
         except:
-            __, nloc = tree.query(qpos, workers=-1)
+            __, cell = tree.query(qpos, workers=-1)
         ttoc = time.time()
         print("* built node-to-cell map:", 
-              np.round(ttoc - ttic, decimals=1), "sec")
+            tile, "of", indx.size - 1)
         
-        nset.append(nloc)
-        
+        nset.append(
+            np.asarray(cell, dtype=np.uint32))
+
+    del tree; 
+    del ppos; del qpos
+
     near = np.concatenate(nset)
-    
-    del tree; del qpos; del nset; del nloc
+
+    del nset; del cell
 
 #-- Build cell-to-pixel map as a sparse matrix, and average
 #-- RTopo pixel values within each cell.
@@ -624,12 +447,12 @@ def dem_remap(args):
 
     ncel = mesh.dimensions["nCells"].size
 
-    cols = np.arange(0, near.size)
+    cols = np.arange(0, near.size, dtype=np.uint32)
     vals = np.ones(near.size, dtype=np.int8)
 
     smat = csr_matrix((vals, (near, cols)), 
         shape=(ncel, near.size), dtype=np.int8)
-    
+
     del near; del cols; del vals
 
     nmap = np.asarray(
@@ -644,27 +467,21 @@ def dem_remap(args):
     vals = np.asarray(
         elev["bed_slope"][:], dtype=np.float32)
     vals = np.reshape(vals, (vals.size, 1))
-    vals = vals ** 2
-
+    
     smap = (smat * vals) / np.maximum(1., nmap)
-    smap = np.sqrt(smap)
     
     vals = np.asarray(
         elev["bed_dz_dx"][:], dtype=np.float32)
     vals = np.reshape(vals, (vals.size, 1))
-    vals = vals ** 3
-
+    
     xmap = (smat * vals) / np.maximum(1., nmap)
-    xmap = np.cbrt(xmap)
     
     vals = np.asarray(
         elev["bed_dz_dy"][:], dtype=np.float32)
     vals = np.reshape(vals, (vals.size, 1))
-    vals = vals ** 3
-
+    
     ymap = (smat * vals) / np.maximum(1., nmap)
-    ymap = np.cbrt(ymap)
-
+    
     vals = np.asarray(
         elev["ocn_thickness"][:], dtype=np.float32)
     vals = np.reshape(vals, (vals.size, 1))
@@ -755,20 +572,24 @@ def dem_remap(args):
     
     print("Save to dataset...")
     
-    ebar = (np.multiply(nmap, emap) + 1 * eint) / (1 + nmap)
-    sbar = (np.multiply(nmap, smap) + 1 * sint) / (1 + nmap)
-    xbar = (np.multiply(nmap, xmap) + 1 * xint) / (1 + nmap)
-    ybar = (np.multiply(nmap, ymap) + 1 * yint) / (1 + nmap)
-    obar = (np.multiply(nmap, omap) + 1 * oint) / (1 + nmap)
-    ibar = (np.multiply(nmap, imap) + 1 * iint) / (1 + nmap)
-  
-    tfrc = np.zeros(ofrc.shape, dtype=np.float32)
-    tfrc[ebar < -1./2.] = 1.
-    ofrc = (np.multiply(nmap, ofrc) + 1 * tfrc) / (1 + nmap)
+    ebar = (np.multiply(nmap, emap) + 4 * eint) / (4 + nmap)
+    sbar = (np.multiply(nmap, smap) + 4 * sint) / (4 + nmap)
+    xbar = (np.multiply(nmap, xmap) + 4 * xint) / (4 + nmap)
+    ybar = (np.multiply(nmap, ymap) + 4 * yint) / (4 + nmap)
+    obar = (np.multiply(nmap, omap) + 4 * oint) / (4 + nmap)
+    ibar = (np.multiply(nmap, imap) + 4 * iint) / (4 + nmap)
+
+    obar = np.maximum(0., np.minimum(obar, -ebar))
 
     tfrc = np.zeros(ofrc.shape, dtype=np.float32)
-    tfrc[ibar > +1./2.] = 1.
-    ifrc = (np.multiply(nmap, ifrc) + 1 * tfrc) / (1 + nmap)
+    tfrc[ebar <= +0.] =-ebar[ebar <= +0.]
+    tfrc[ebar <= -1.] = 1.
+    ofrc = (np.multiply(nmap, ofrc) + 4 * tfrc) / (4 + nmap)
+
+    tfrc = np.zeros(ofrc.shape, dtype=np.float32)
+    tfrc[ibar >= +0.] =+ibar[ibar >= +0.]
+    tfrc[ibar >= +1.] = 1.
+    ifrc = (np.multiply(nmap, ifrc) + 4 * tfrc) / (4 + nmap)
 
     if ("bed_elevation" not in mesh.variables.keys()):
         mesh.createVariable("bed_elevation", "f4", ("nCells"))
@@ -788,15 +609,27 @@ def dem_remap(args):
     if ("ice_thickness" not in mesh.variables.keys()):
         mesh.createVariable("ice_thickness", "f4", ("nCells"))
 
+    mesh["bed_elevation"].units = "m"
     mesh["bed_elevation"][:] = ebar
+    mesh["bed_elevation"].long_name = names.bed_elevation
+    
+    mesh["ocn_thickness"].units = "m"
     mesh["ocn_thickness"][:] = obar
+    mesh["ocn_thickness"].long_name = names.ocn_thickness
+    
+    mesh["ice_thickness"].units = "m"
     mesh["ice_thickness"][:] = ibar
+    mesh["ice_thickness"].long_name = names.ice_thickness
 
     mesh["bed_dz_dx"][:] = xbar
+    mesh["bed_dz_dx"].long_name = names.bed_dz_dx
     mesh["bed_dz_dy"][:] = ybar
+    mesh["bed_dz_dy"].long_name = names.bed_dz_dy
 
+    mesh["bed_slope"].units = "deg"
     mesh["bed_slope"][:] = \
         np.arctan(sbar) * 180. / np.pi  # degrees, for ELM
+    mesh["bed_slope"].long_name = names.bed_slope_deg
 
     if ("ocn_cover" not in mesh.variables.keys()):
         mesh.createVariable("ocn_cover", "f4", ("nCells"))
@@ -805,7 +638,9 @@ def dem_remap(args):
         mesh.createVariable("ice_cover", "f4", ("nCells"))
 
     mesh["ocn_cover"][:] = ofrc
+    mesh["ocn_cover"].long_name = names.ocn_cover
     mesh["ice_cover"][:] = ifrc
+    mesh["ice_cover"].long_name = names.ice_cover
 
     del emap; del eint; del smap; del sint
     del xmap; del xint; del ymap; del yint
@@ -885,10 +720,20 @@ def dem_remap(args):
         mesh.createVariable("ice_thickness_profile", 
                             "f4", ("nCells", "nProfiles"))
 
+    mesh["bed_elevation_profile"].units = "m"
     mesh["bed_elevation_profile"][:, :] = eprf
+    mesh["bed_elevation_profile"].long_name = names.bed_elevation_profile
+    
     mesh["bed_slope_profile"][:, :] = sprf
+    mesh["bed_slope_profile"].long_name = names.bed_slope_profile
+   
+    mesh["ocn_thickness_profile"].units = "m"
     mesh["ocn_thickness_profile"][:, :] = oprf
+    mesh["ocn_thickness_profile"].long_name = names.ocn_thickness_profile
+    
+    mesh["ice_thickness_profile"].units = "m"
     mesh["ice_thickness_profile"][:, :] = iprf
+    mesh["ice_thickness_profile"].long_name = names.ice_thickness_profile
 
     elev.close()
     mesh.close()
@@ -911,10 +756,5 @@ if (__name__ == "__main__"):
         "--elev-band", dest="elev_band", type=int,
         default=0,
         required=False, help="Elev. profile band(s).")
-        
-    parser.add_argument(
-        "--elev-sph-radius", dest="elev_sph_radius", type=float,
-        default=6371220.,
-        required=False, help="Radius of sphere for elev. data.")
 
     dem_remap(parser.parse_args())
