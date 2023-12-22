@@ -1,6 +1,6 @@
-## `RTopo-DEM`
+## `DEM`
 
-Utilities for working with the `RTopo-2.x`, `GEBCO` and `SRTM15+` data-sets in `MPAS-O`.
+Utilities for working with the `RTopo-2.x`, `GEBCO` and `SRTM15+` digital elevation models in `MPAS-O`.
 
     python3 dem_remap.py \
     --mpas-file="path+name-to-mpas-mesh-file" \
