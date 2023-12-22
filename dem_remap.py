@@ -382,6 +382,38 @@ def dem_remap(args):
 
     xlon = np.asarray(elev["lon"][:], dtype=np.float64)
     ylat = np.asarray(elev["lat"][:], dtype=np.float64)
+ 
+ #-- add dummy data to elev file if missing
+    
+    if ("bed_elevation" not in elev.variables.keys()):
+        print("*bed_elevation variable not found")
+        elev.createVariable("bed_elevation", 
+                            "i2", ("num_row", "num_col"))
+    
+    if ("bed_slope" not in elev.variables.keys()):
+        print("*bed_slope variable not found")
+        elev.createVariable("bed_slope", 
+                            "f4", ("num_row", "num_col"))
+        
+    if ("bed_dz_dx" not in elev.variables.keys()):
+        print("*bed_dz_dx variable not found")
+        elev.createVariable("bed_dz_dx", 
+                            "f4", ("num_row", "num_col"))
+    
+    if ("bed_dz_dy" not in elev.variables.keys()):
+        print("*bed_dz_dy variable not found")
+        elev.createVariable("bed_dz_dy", 
+                            "f4", ("num_row", "num_col"))
+    
+    if ("ocn_thickness" not in elev.variables.keys()):
+        print("*ocn_thickness variable not found")
+        elev.createVariable("ocn_thickness", 
+                            "i2", ("num_row", "num_col"))
+
+    if ("ice_thickness" not in elev.variables.keys()):
+        print("*ice_thickness variable not found")
+        elev.createVariable("ice_thickness", 
+                            "i2", ("num_row", "num_col"))
 
 #-- Compute an approximate remapping, associating pixels in
 #-- the DEM with cells in the MPAS mesh. Since polygons are
@@ -398,8 +430,6 @@ def dem_remap(args):
     ppos[:, 2] = mesh["zCell"][:]
 
     tree = spatial.cKDTree(ppos, leafsize=32)
-
-    alen = np.sqrt(mesh["areaCell"][:])
 
     print("Remap elevation...")
 
