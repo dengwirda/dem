@@ -5,8 +5,9 @@ import argparse
 
 from dem_names import names
 
-# Authors: Darren Engwirda
+# Utilities to transfer data between MPAS-like meshes
 
+# Authors: Darren Engwirda
 
 def dem_trnsf(args):
     """

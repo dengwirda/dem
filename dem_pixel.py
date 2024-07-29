@@ -3,10 +3,12 @@ import os
 import time
 import numpy as np
 import netCDF4 as nc
-from scipy.ndimage import gaussian_filter
+from scipy.ndimage import gaussian_filter, median_filter
 import argparse
 
 from dem_names import names
+
+# Utilities to build pixel files from RTopo + GEBCO datasets
 
 # Authors: Darren Engwirda
 
@@ -48,27 +50,29 @@ def cell_dzdx(xlon, ylat, vals, rsph):
     ridx, icol = np.ogrid[:rows+1, :cols+1]
 
     # dz/dx is poorly conditioned at poles
-    beta = (np.tanh((ymid + 87.5)*2.5) -
-            np.tanh((ymid - 87.5)*2.5) ) * 0.5
+    beta = ( (
+        np.maximum(0., np.minimum(1., (ymid + 90.0) / 5.))
+      + np.maximum(0., np.minimum(1., (90.0 - ymid) / 5.))
+        ) - 1.0) ** 2
     beta = np.reshape(beta, (beta.size, 1))
 
-    filt = np.asarray(vals, dtype=np.float32)
+    filt = np.array(vals, dtype=np.float32)
 
-    part = rows // 20
+    part = rows // 18
     fbot = gaussian_filter(filt[+0:part*+1, :],
-        sigma=(4., cols / 512.), mode=("reflect", "wrap"))
+        sigma=(3., cols / 768.), mode=("reflect", "wrap"))
 
-    ftop = gaussian_filter(filt[19*part:-1, :],
-        sigma=(4., cols / 512.), mode=("reflect", "wrap"))
+    ftop = gaussian_filter(filt[17*part:-1, :],
+        sigma=(3., cols / 768.), mode=("reflect", "wrap"))
     
     filt[+0:part*+1, :] = fbot
-    filt[19*part:-1, :] = ftop
+    filt[17*part:-1, :] = ftop
 
     vals*= beta  # careful with mem. alloc.
     beta = (+1. - beta)
     vals+= beta * filt
-   #vals = beta * vals + (1. - beta) * filt
-
+   #vals = beta * vals + (1 - beta) * filt
+   
     del filt; del ftop; del fbot
 
     xmid = xmid * np.pi / 180.
@@ -313,7 +317,6 @@ def blend_front(e1st, i1st, e2nd, halo, sdev):
     mask /= float(halo + 1.00)
 
     mask = gaussian_filter(mask, sigma=sdev, mode="wrap")
-    mask = mask ** 1.50
     mask[i1st >= 1] = 0.
 
     return np.asarray(mask, dtype=np.float32)
@@ -874,8 +877,12 @@ def rtopo_gebco_60sec(args):
     data[:, :] = ocnh
 
     # filt. grid-scale noise that imprints on dz/dx...
-    filt = gaussian_filter(np.asarray(
-        elev, dtype=np.float32), sigma=.625, mode="wrap")
+    filt = median_filter(np.asarray(
+        elev, dtype=np.float32), size=(3,3), mode="wrap")
+
+    filt = gaussian_filter(filt, sigma=0.50, mode="wrap")
+
+    del elev; del ocnh; del iceh
 
     zslp, dzdx, dzdy = \
         cell_dzdx(xpos, ypos, filt, RSPH)
@@ -926,7 +933,7 @@ def rtopo_gebco_30sec(args):
     mask = blend_front(e1st, i1st, e2nd, halo=10, sdev=1.0)
    
     elev = np.asarray(np.round(
-        (1. - mask) * e1st + mask * e2nd), dtype=np.int16)  
+        (1. - mask) * e1st + mask * e2nd), dtype=np.int16)
 
     iceh = i1st
     ocnh = o1st
@@ -978,8 +985,12 @@ def rtopo_gebco_30sec(args):
     data[:, :] = ocnh
 
     # filt. grid-scale noise that imprints on dz/dx...
-    filt = gaussian_filter(np.asarray(
-        elev, dtype=np.float32), sigma=1.25, mode="wrap")
+    filt = median_filter(np.asarray(
+        elev, dtype=np.float32), size=(3,3), mode="wrap")
+
+    filt = gaussian_filter(filt, sigma=1.00, mode="wrap")
+
+    del elev; del ocnh; del iceh
 
     zslp, dzdx, dzdy = \
         cell_dzdx(xpos, ypos, filt, RSPH)
@@ -1027,11 +1038,10 @@ def rtopo_gebco_15sec(args):
     mask = blend_front(elev, iceh, e2nd, halo=20, sdev=2.0)
    
     # careful w mem. alloc.
-    del iceh;
     elev = np.asarray(elev, dtype=np.float32)
     elev-= mask * elev
     elev+= mask * e2nd
-    del e2nd; del mask
+    del iceh; del e2nd; del mask
 
     elev = np.asarray(np.round(elev), dtype=np.int16)
 
@@ -1092,8 +1102,10 @@ def rtopo_gebco_15sec(args):
     data[:, :] = ocnh
 
     # filt. grid-scale noise that imprints on dz/dx...
-    filt = gaussian_filter(np.asarray(
-        elev, dtype=np.float32), sigma=2.50, mode="wrap")
+    filt = median_filter(np.asarray(
+        elev, dtype=np.float32), size=(3,3), mode="wrap")
+
+    filt = gaussian_filter(filt, sigma=2.00, mode="wrap")
 
     del elev; del ocnh; del iceh
 
