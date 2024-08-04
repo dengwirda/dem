@@ -9,6 +9,8 @@ import argparse
 
 from dem_names import names
 
+# Utilities to remap data between pixel and MPAS-like meshes
+
 # Authors: Darren Engwirda
 
 def map_to_r3(mesh, xlon, ylat, head, tail):

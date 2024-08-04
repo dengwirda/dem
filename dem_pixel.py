@@ -3,10 +3,12 @@ import os
 import time
 import numpy as np
 import netCDF4 as nc
-from scipy.ndimage import gaussian_filter
+from scipy.ndimage import gaussian_filter, median_filter
 import argparse
 
 from dem_names import names
+
+# Utilities to build pixel files from RTopo + GEBCO datasets
 
 # Authors: Darren Engwirda
 
@@ -48,27 +50,29 @@ def cell_dzdx(xlon, ylat, vals, rsph):
     ridx, icol = np.ogrid[:rows+1, :cols+1]
 
     # dz/dx is poorly conditioned at poles
-    beta = (np.tanh((ymid + 87.5)*2.5) -
-            np.tanh((ymid - 87.5)*2.5) ) * 0.5
+    beta = ( (
+        np.maximum(0., np.minimum(1., (ymid + 90.0) / 5.))
+      + np.maximum(0., np.minimum(1., (90.0 - ymid) / 5.))
+        ) - 1.0) ** 2
     beta = np.reshape(beta, (beta.size, 1))
 
-    filt = np.asarray(vals, dtype=np.float32)
+    filt = np.array(vals, dtype=np.float32)
 
-    part = rows // 20
+    part = rows // 18
     fbot = gaussian_filter(filt[+0:part*+1, :],
-        sigma=(4., cols / 512.), mode=("reflect", "wrap"))
+        sigma=(3., cols / 768.), mode=("reflect", "wrap"))
 
-    ftop = gaussian_filter(filt[19*part:-1, :],
-        sigma=(4., cols / 512.), mode=("reflect", "wrap"))
+    ftop = gaussian_filter(filt[17*part:-1, :],
+        sigma=(3., cols / 768.), mode=("reflect", "wrap"))
     
     filt[+0:part*+1, :] = fbot
-    filt[19*part:-1, :] = ftop
+    filt[17*part:-1, :] = ftop
 
     vals*= beta  # careful with mem. alloc.
     beta = (+1. - beta)
     vals+= beta * filt
-   #vals = beta * vals + (1. - beta) * filt
-
+   #vals = beta * vals + (1 - beta) * filt
+   
     del filt; del ftop; del fbot
 
     xmid = xmid * np.pi / 180.
@@ -313,7 +317,6 @@ def blend_front(e1st, i1st, e2nd, halo, sdev):
     mask /= float(halo + 1.00)
 
     mask = gaussian_filter(mask, sigma=sdev, mode="wrap")
-    mask = mask ** 1.50
     mask[i1st >= 1] = 0.
 
     return np.asarray(mask, dtype=np.float32)
@@ -641,15 +644,15 @@ def rtopo_15sec(args):
 
 def gebco_60sec(args):
     """
-    Create a zipped and pixel centred version of GEBCO[2023]
+    Create a zipped and pixel centred version of GEBCO[2024]
     (15 arc-sec) at 60 arc-sec.
 
     """
 
-    print("Making GEBCO[2023] (60 arc-sec) pixel...")
+    print("Making GEBCO[2024] (60 arc-sec) pixel...")
 
     data = nc.Dataset(os.path.join(
-        args.elev_path, "GEBCO_2023_sub_ice_topo.nc"), "r")
+        args.elev_path, "GEBCO_2024_sub_ice_topo.nc"), "r")
 
     elev = np.asarray(
         data["elevation"][:], dtype=np.float32)
@@ -673,7 +676,7 @@ def gebco_60sec(args):
 
     root = nc.Dataset(
         os.path.join(
-            args.save_path, "GEBCO_v2023_60sec_pixel.nc"),
+            args.save_path, "GEBCO_v2024_60sec_pixel.nc"),
         "w", format="NETCDF4")
     root.createDimension("num_lon", elev.shape[1] + 1)
     root.createDimension("num_col", elev.shape[1])    
@@ -696,15 +699,15 @@ def gebco_60sec(args):
 
 def gebco_30sec(args):
     """
-    Create a zipped and pixel centred version of GEBCO[2023]
+    Create a zipped and pixel centred version of GEBCO[2024]
     (15 arc-sec) at 30 arc-sec.
 
     """
 
-    print("Making GEBCO[2023] (30 arc-sec) pixel...")
+    print("Making GEBCO[2024] (30 arc-sec) pixel...")
 
     data = nc.Dataset(os.path.join(
-        args.elev_path, "GEBCO_2023_sub_ice_topo.nc"), "r")
+        args.elev_path, "GEBCO_2024_sub_ice_topo.nc"), "r")
 
     elev = np.asarray(
         data["elevation"][:], dtype=np.float32)
@@ -728,7 +731,7 @@ def gebco_30sec(args):
 
     root = nc.Dataset(
         os.path.join(
-            args.save_path, "GEBCO_v2023_30sec_pixel.nc"), 
+            args.save_path, "GEBCO_v2024_30sec_pixel.nc"), 
         "w", format="NETCDF4")
     root.createDimension("num_lon", elev.shape[1] + 1)
     root.createDimension("num_col", elev.shape[1])    
@@ -751,15 +754,15 @@ def gebco_30sec(args):
 
 def gebco_15sec(args):
     """
-    Create a zipped and pixel centred version of GEBCO[2023]
+    Create a zipped and pixel centred version of GEBCO[2024]
     (15 arc-sec) at 15 arc-sec.
 
     """
 
-    print("Making GEBCO[2023] (15 arc-sec) pixel...")
+    print("Making GEBCO[2024] (15 arc-sec) pixel...")
 
     data = nc.Dataset(os.path.join(
-        args.elev_path, "GEBCO_2023_sub_ice_topo.nc"), "r")
+        args.elev_path, "GEBCO_2024_sub_ice_topo.nc"), "r")
 
     elev = np.asarray(
         data["elevation"][:], dtype=np.int16)
@@ -771,7 +774,7 @@ def gebco_15sec(args):
 
     root = nc.Dataset(
         os.path.join(
-            args.save_path, "GEBCO_v2023_15sec_pixel.nc"), 
+            args.save_path, "GEBCO_v2024_15sec_pixel.nc"), 
         "w", format="NETCDF4")
     root.createDimension("num_lon", elev.shape[1] + 1)
     root.createDimension("num_col", elev.shape[1])    
@@ -795,7 +798,7 @@ def gebco_15sec(args):
 def rtopo_gebco_60sec(args):
     """
     Create a zipped and pixel centred 'blend' of RTopo 2.0.4
-    and GEBCO[2023] at 60 arc-sec.
+    and GEBCO[2024] at 60 arc-sec.
 
     """
 
@@ -814,7 +817,7 @@ def rtopo_gebco_60sec(args):
         data["ocn_thickness"][:], dtype=np.int16)
 
     data = nc.Dataset(os.path.join(
-        args.elev_path, "GEBCO_v2023_60sec_pixel.nc"), "r")
+        args.elev_path, "GEBCO_v2024_60sec_pixel.nc"), "r")
 
     e2nd = np.asarray(
         data["bed_elevation"][:], dtype=np.int16)
@@ -835,17 +838,17 @@ def rtopo_gebco_60sec(args):
 
     root = nc.Dataset(
         os.path.join(args.save_path, 
-            "RTopo_2_0_4_GEBCO_v2023_60sec_pixel.nc"),
+            "RTopo_2_0_4_GEBCO_v2024_60sec_pixel.nc"),
         "w", format="NETCDF4")
     root.description = "Blend of RTopo-2.0.4 (60 arc-sec) " + \
-        "and GEBCO[2023] (15 arc-sec) - pixel centred and " + \
+        "and GEBCO[2024] (15 arc-sec) - pixel centred and " + \
         "compressed to int16_t. RTopo data used under ice " + \
         "sheets/shelves. Remapped to 60 arc-sec."
     root.source = \
-        "RTopo-2.0.4_1min_data.nc and GEBCO_2023.nc"
+        "RTopo-2.0.4_1min_data.nc and GEBCO_2024.nc"
     root.references = \
         "doi.pangaea.de/10.1594/PANGAEA.905295 and " + \
-        "doi.org/10.5285/a29c5465-b138-234d-e053-6c86abc040b9"
+        "doi.org/10.5285/1c44ce99-0a0d-5f4f-e063-7086abc0ea0f"
     root.createDimension("num_lon", elev.shape[1] + 1)
     root.createDimension("num_col", elev.shape[1])    
     root.createDimension("num_lat", elev.shape[0] + 1)
@@ -874,8 +877,12 @@ def rtopo_gebco_60sec(args):
     data[:, :] = ocnh
 
     # filt. grid-scale noise that imprints on dz/dx...
-    filt = gaussian_filter(np.asarray(
-        elev, dtype=np.float32), sigma=.625, mode="wrap")
+    filt = median_filter(np.asarray(
+        elev, dtype=np.float32), size=(3,3), mode="wrap")
+
+    filt = gaussian_filter(filt, sigma=0.50, mode="wrap")
+
+    del elev; del ocnh; del iceh
 
     zslp, dzdx, dzdy = \
         cell_dzdx(xpos, ypos, filt, RSPH)
@@ -899,7 +906,7 @@ def rtopo_gebco_60sec(args):
 def rtopo_gebco_30sec(args):
     """
     Create a zipped and pixel centred 'blend' of RTopo 2.0.4
-    and GEBCO[2023] at 30 arc-sec.
+    and GEBCO[2024] at 30 arc-sec.
 
     """
 
@@ -918,7 +925,7 @@ def rtopo_gebco_30sec(args):
         data["ocn_thickness"][:], dtype=np.int16)
 
     data = nc.Dataset(os.path.join(
-        args.elev_path, "GEBCO_v2023_30sec_pixel.nc"), "r")
+        args.elev_path, "GEBCO_v2024_30sec_pixel.nc"), "r")
 
     e2nd = np.asarray(
         data["bed_elevation"][:], dtype=np.int16)
@@ -926,7 +933,7 @@ def rtopo_gebco_30sec(args):
     mask = blend_front(e1st, i1st, e2nd, halo=10, sdev=1.0)
    
     elev = np.asarray(np.round(
-        (1. - mask) * e1st + mask * e2nd), dtype=np.int16)  
+        (1. - mask) * e1st + mask * e2nd), dtype=np.int16)
 
     iceh = i1st
     ocnh = o1st
@@ -939,17 +946,17 @@ def rtopo_gebco_30sec(args):
 
     root = nc.Dataset(
         os.path.join(args.save_path, 
-            "RTopo_2_0_4_GEBCO_v2023_30sec_pixel.nc"),
+            "RTopo_2_0_4_GEBCO_v2024_30sec_pixel.nc"),
         "w", format="NETCDF4")
     root.description = "Blend of RTopo-2.0.4 (30 arc-sec) " + \
-        "and GEBCO[2023] (15 arc-sec) - pixel centred and " + \
+        "and GEBCO[2024] (15 arc-sec) - pixel centred and " + \
         "compressed to int16_t. RTopo data used under ice " + \
         "sheets/shelves. Remapped to 30 arc-sec."
     root.source = \
-        "RTopo-2.0.4_30sec_data.nc and GEBCO_2023.nc"
+        "RTopo-2.0.4_30sec_data.nc and GEBCO_2024.nc"
     root.references = \
         "doi.pangaea.de/10.1594/PANGAEA.905295 and " + \
-        "doi.org/10.5285/a29c5465-b138-234d-e053-6c86abc040b9"
+        "doi.org/10.5285/1c44ce99-0a0d-5f4f-e063-7086abc0ea0f"
     root.createDimension("num_lon", elev.shape[1] + 1)
     root.createDimension("num_col", elev.shape[1])    
     root.createDimension("num_lat", elev.shape[0] + 1)
@@ -978,8 +985,12 @@ def rtopo_gebco_30sec(args):
     data[:, :] = ocnh
 
     # filt. grid-scale noise that imprints on dz/dx...
-    filt = gaussian_filter(np.asarray(
-        elev, dtype=np.float32), sigma=1.25, mode="wrap")
+    filt = median_filter(np.asarray(
+        elev, dtype=np.float32), size=(3,3), mode="wrap")
+
+    filt = gaussian_filter(filt, sigma=1.00, mode="wrap")
+
+    del elev; del ocnh; del iceh
 
     zslp, dzdx, dzdy = \
         cell_dzdx(xpos, ypos, filt, RSPH)
@@ -1003,7 +1014,7 @@ def rtopo_gebco_30sec(args):
 def rtopo_gebco_15sec(args):
     """
     Create a zipped and pixel centred 'blend' of RTopo 2.0.4
-    and GEBCO[2023] at 15 arc-sec.
+    and GEBCO[2024] at 15 arc-sec.
 
     """
 
@@ -1019,7 +1030,7 @@ def rtopo_gebco_15sec(args):
         data["ice_thickness"][:], dtype=np.int16)
 
     data = nc.Dataset(os.path.join(
-        args.elev_path, "GEBCO_v2023_15sec_pixel.nc"), "r")
+        args.elev_path, "GEBCO_v2024_15sec_pixel.nc"), "r")
 
     e2nd = np.asarray(
         data["bed_elevation"][:], dtype=np.int16)
@@ -1027,11 +1038,10 @@ def rtopo_gebco_15sec(args):
     mask = blend_front(elev, iceh, e2nd, halo=20, sdev=2.0)
    
     # careful w mem. alloc.
-    del iceh;
     elev = np.asarray(elev, dtype=np.float32)
     elev-= mask * elev
     elev+= mask * e2nd
-    del e2nd; del mask
+    del iceh; del e2nd; del mask
 
     elev = np.asarray(np.round(elev), dtype=np.int16)
 
@@ -1053,17 +1063,17 @@ def rtopo_gebco_15sec(args):
 
     root = nc.Dataset(
         os.path.join(args.save_path, 
-            "RTopo_2_0_4_GEBCO_v2023_15sec_pixel.nc"),
+            "RTopo_2_0_4_GEBCO_v2024_15sec_pixel.nc"),
         "w", format="NETCDF4")
     root.description = "Blend of RTopo-2.0.4 (30 arc-sec) " + \
-        "and GEBCO[2023] (15 arc-sec) - pixel centred and " + \
+        "and GEBCO[2024] (15 arc-sec) - pixel centred and " + \
         "compressed to int16_t. RTopo data used under ice " + \
         "sheets/shelves. Remapped to 15 arc-sec."
     root.source = \
-        "RTopo-2.0.4_30sec_data.nc and GEBCO_2023.nc"
+        "RTopo-2.0.4_30sec_data.nc and GEBCO_2024.nc"
     root.references = \
         "doi.pangaea.de/10.1594/PANGAEA.905295 and " + \
-        "doi.org/10.5285/a29c5465-b138-234d-e053-6c86abc040b9"
+        "doi.org/10.5285/1c44ce99-0a0d-5f4f-e063-7086abc0ea0f"
     root.createDimension("num_lon", elev.shape[1] + 1)
     root.createDimension("num_col", elev.shape[1])    
     root.createDimension("num_lat", elev.shape[0] + 1)
@@ -1092,8 +1102,10 @@ def rtopo_gebco_15sec(args):
     data[:, :] = ocnh
 
     # filt. grid-scale noise that imprints on dz/dx...
-    filt = gaussian_filter(np.asarray(
-        elev, dtype=np.float32), sigma=2.50, mode="wrap")
+    filt = median_filter(np.asarray(
+        elev, dtype=np.float32), size=(3,3), mode="wrap")
+
+    filt = gaussian_filter(filt, sigma=2.00, mode="wrap")
 
     del elev; del ocnh; del iceh
 
